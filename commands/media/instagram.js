@@ -10,10 +10,10 @@ const config = require('../../config');
 const processedMessages = new Set();
 
 // Plain fetch to IG CDN often gets blocked (returns HTML login/error page instead
-// of video bytes) unless Referer/Origin look like a real IG page request.
-// Validate we actually got video bytes before handing to WA, or it shows
-// "wrong file"/can't-open errors.
-async function fetchVideoBuffer(mediaUrl) {
+// of real media bytes) unless Referer/Origin look like a real IG page request.
+// Validate we actually got image/video bytes before handing to WA, or it shows
+// "wrong file"/can't-open/"image not available" errors.
+async function fetchMediaBuffer(mediaUrl, isVideo) {
   const res = await axios.get(mediaUrl, {
     responseType: 'arraybuffer',
     timeout: 30000,
@@ -25,23 +25,24 @@ async function fetchVideoBuffer(mediaUrl) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Referer': 'https://www.instagram.com/',
       'Origin': 'https://www.instagram.com',
-      'Accept': 'video/mp4,video/*,*/*;q=0.8'
+      'Accept': isVideo ? 'video/mp4,video/*,*/*;q=0.8' : 'image/avif,image/webp,image/*,*/*;q=0.8'
     }
   });
 
   const buffer = Buffer.from(res.data);
   const contentType = (res.headers['content-type'] || '').toLowerCase();
+  const expectedPrefix = isVideo ? 'video/' : 'image/';
 
   const looksHtml = buffer.length >= 10 &&
     /^<!doctype html|^<html/i.test(buffer.toString('utf8', 0, 100).trim());
 
   if (looksHtml) {
-    throw new Error('blocked: got HTML page instead of video (IG CDN rejected request)');
+    throw new Error('blocked: got HTML page instead of media (IG CDN rejected request)');
   }
-  if (contentType && !contentType.startsWith('video/') && contentType !== 'application/octet-stream') {
+  if (contentType && !contentType.startsWith(expectedPrefix) && contentType !== 'application/octet-stream') {
     throw new Error(`unexpected content-type: ${contentType}`);
   }
-  if (buffer.length < 1024) {
+  if (buffer.length < 512) {
     throw new Error(`suspiciously small file: ${buffer.length} bytes`);
   }
 
@@ -182,7 +183,7 @@ module.exports = {
           if (isVideo) {
             // Stream direct URL to WA often fails for video (IG CDN blocks/timeouts on big fetch).
             // Pull + validate bytes ourselves first, then hand baileys a Buffer.
-            const vBuf = await fetchVideoBuffer(mediaUrl);
+            const vBuf = await fetchMediaBuffer(mediaUrl, true);
 
             await sock.sendMessage(chatId, {
               video: vBuf,
@@ -190,8 +191,11 @@ module.exports = {
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           } else {
+            // Same deal for images: direct-URL stream gets blocked/blank by IG CDN too.
+            const iBuf = await fetchMediaBuffer(mediaUrl, false);
+
             await sock.sendMessage(chatId, {
-              image: { url: mediaUrl },
+              image: iBuf,
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           }
