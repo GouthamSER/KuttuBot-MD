@@ -3,10 +3,50 @@
  */
 
 const { igdl } = require('ruhend-scraper');
+const axios = require('axios');
 const config = require('../../config');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
+
+// Plain fetch to IG CDN often gets blocked (returns HTML login/error page instead
+// of video bytes) unless Referer/Origin look like a real IG page request.
+// Validate we actually got video bytes before handing to WA, or it shows
+// "wrong file"/can't-open errors.
+async function fetchVideoBuffer(mediaUrl) {
+  const res = await axios.get(mediaUrl, {
+    responseType: 'arraybuffer',
+    timeout: 30000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    maxRedirects: 5,
+    validateStatus: (s) => s >= 200 && s < 300,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': 'https://www.instagram.com/',
+      'Origin': 'https://www.instagram.com',
+      'Accept': 'video/mp4,video/*,*/*;q=0.8'
+    }
+  });
+
+  const buffer = Buffer.from(res.data);
+  const contentType = (res.headers['content-type'] || '').toLowerCase();
+
+  const looksHtml = buffer.length >= 10 &&
+    /^<!doctype html|^<html/i.test(buffer.toString('utf8', 0, 100).trim());
+
+  if (looksHtml) {
+    throw new Error('blocked: got HTML page instead of video (IG CDN rejected request)');
+  }
+  if (contentType && !contentType.startsWith('video/') && contentType !== 'application/octet-stream') {
+    throw new Error(`unexpected content-type: ${contentType}`);
+  }
+  if (buffer.length < 1024) {
+    throw new Error(`suspiciously small file: ${buffer.length} bytes`);
+  }
+
+  return buffer;
+}
 
 function extractUniqueMedia(mediaData) {
   const uniqueMedia = [];
@@ -112,12 +152,8 @@ module.exports = {
 
           if (isVideo) {
             // Stream direct URL to WA often fails for video (IG CDN blocks/timeouts on big fetch).
-            // Pull bytes ourselves first, then hand baileys a Buffer.
-            const vRes = await fetch(mediaUrl, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-            });
-            if (!vRes.ok) throw new Error(`video fetch failed: HTTP ${vRes.status}`);
-            const vBuf = Buffer.from(await vRes.arrayBuffer());
+            // Pull + validate bytes ourselves first, then hand baileys a Buffer.
+            const vBuf = await fetchVideoBuffer(mediaUrl);
 
             await sock.sendMessage(chatId, {
               video: vBuf,
