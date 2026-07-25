@@ -27,7 +27,10 @@ function extractUniqueMedia(mediaData) {
 // Ask the CDN directly what it is.
 async function detectMediaType(mediaUrl) {
   try {
-    const res = await fetch(mediaUrl, { method: 'HEAD' });
+    const res = await fetch(mediaUrl, {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.startsWith('video/')) return 'video';
     if (contentType.startsWith('image/')) return 'image';
@@ -96,19 +99,28 @@ module.exports = {
       }
 
       for (let i = 0; i < mediaToDownload.length; i++) {
+        let isVideo = false;
         try {
           const media = mediaToDownload[i];
           const mediaUrl = media.url;
 
           // Ask the CDN what it actually is first; extension/type-field guessing is unreliable for stories
           const detectedType = await detectMediaType(mediaUrl);
-          const isVideo = detectedType
+          isVideo = detectedType
             ? detectedType === 'video'
             : (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaUrl) || media.type === 'video');
 
           if (isVideo) {
+            // Stream direct URL to WA often fails for video (IG CDN blocks/timeouts on big fetch).
+            // Pull bytes ourselves first, then hand baileys a Buffer.
+            const vRes = await fetch(mediaUrl, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+            });
+            if (!vRes.ok) throw new Error(`video fetch failed: HTTP ${vRes.status}`);
+            const vBuf = Buffer.from(await vRes.arrayBuffer());
+
             await sock.sendMessage(chatId, {
-              video: { url: mediaUrl },
+              video: vBuf,
               mimetype: 'video/mp4',
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
@@ -124,6 +136,7 @@ module.exports = {
           }
         } catch (mediaError) {
           console.error(`Error downloading story item ${i + 1}:`, mediaError);
+          await extra.reply(`⚠️ Item ${i + 1} failed (${isVideo ? 'video' : 'image'}): ${mediaError.message}`);
         }
       }
     } catch (error) {
