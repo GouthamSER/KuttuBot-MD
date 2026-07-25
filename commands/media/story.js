@@ -2,52 +2,14 @@
  * Instagram Story Downloader - Using ruhend-scraper (igdl supports /stories/ links)
  */
 
+const fs = require('fs');
 const { igdl } = require('ruhend-scraper');
 const axios = require('axios');
 const config = require('../../config');
+const { createTempFilePath, deleteTempFile } = require('../../utils/tempManager');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
-
-// Plain fetch to IG CDN often gets blocked (returns HTML login/error page instead
-// of real media bytes) unless Referer/Origin look like a real IG page request.
-// Validate we actually got image/video bytes before handing to WA, or it shows
-// "wrong file"/can't-open/"image not available" errors.
-async function fetchMediaBuffer(mediaUrl, isVideo) {
-  const res = await axios.get(mediaUrl, {
-    responseType: 'arraybuffer',
-    timeout: 30000,
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-    maxRedirects: 5,
-    validateStatus: (s) => s >= 200 && s < 300,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Referer': 'https://www.instagram.com/',
-      'Origin': 'https://www.instagram.com',
-      'Accept': isVideo ? 'video/mp4,video/*,*/*;q=0.8' : 'image/avif,image/webp,image/*,*/*;q=0.8'
-    }
-  });
-
-  const buffer = Buffer.from(res.data);
-  const contentType = (res.headers['content-type'] || '').toLowerCase();
-  const expectedPrefix = isVideo ? 'video/' : 'image/';
-
-  const looksHtml = buffer.length >= 10 &&
-    /^<!doctype html|^<html/i.test(buffer.toString('utf8', 0, 100).trim());
-
-  if (looksHtml) {
-    throw new Error('blocked: got HTML page instead of media (IG CDN rejected request)');
-  }
-  if (contentType && !contentType.startsWith(expectedPrefix) && contentType !== 'application/octet-stream') {
-    throw new Error(`unexpected content-type: ${contentType}`);
-  }
-  if (buffer.length < 512) {
-    throw new Error(`suspiciously small file: ${buffer.length} bytes`);
-  }
-
-  return buffer;
-}
 
 function extractUniqueMedia(mediaData) {
   const uniqueMedia = [];
@@ -64,21 +26,60 @@ function extractUniqueMedia(mediaData) {
   return uniqueMedia;
 }
 
-// IG CDN urls have no file extension, so extension/type-field guessing is unreliable.
-// Ask the CDN directly what it is.
-async function detectMediaType(mediaUrl) {
-  try {
-    const res = await fetch(mediaUrl, {
-      method: 'HEAD',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.startsWith('video/')) return 'video';
-    if (contentType.startsWith('image/')) return 'image';
-  } catch (e) {
-    // HEAD blocked/failed, fall through to extension guess below
-  }
+// Sniff magic bytes - reliable even if content-type header is missing/wrong
+// (common on IG CDN, which often sends application/octet-stream for everything).
+function sniffType(buffer) {
+  if (buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp') return 'video'; // mp4/mov
+  if (buffer.length >= 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) return 'video'; // webm/mkv
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image'; // jpeg
+  if (buffer.length >= 8 && buffer.toString('hex', 0, 8) === '89504e470d0a1a0a') return 'image'; // png
+  if (buffer.length >= 6 && (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a')) return 'image'; // gif
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return 'image'; // webp
   return null;
+}
+
+// Single GET, with IG-friendly headers (Referer/Origin), that:
+// 1. gets the real bytes (no separate blocked-prone HEAD call)
+// 2. figures out image vs video from content-type + magic-byte sniff (most reliable)
+// 3. rejects HTML/blocked/garbage responses before we ever try to send them
+async function fetchAndDetectMedia(mediaUrl) {
+  const res = await axios.get(mediaUrl, {
+    responseType: 'arraybuffer',
+    timeout: 30000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    maxRedirects: 5,
+    validateStatus: (s) => s >= 200 && s < 300,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': 'https://www.instagram.com/',
+      'Origin': 'https://www.instagram.com',
+      'Accept': '*/*'
+    }
+  });
+
+  const buffer = Buffer.from(res.data);
+  const contentType = (res.headers['content-type'] || '').toLowerCase();
+
+  const looksHtml = buffer.length >= 10 &&
+    /^<!doctype html|^<html/i.test(buffer.toString('utf8', 0, 100).trim());
+  if (looksHtml) {
+    throw new Error('blocked: got HTML page instead of media (IG CDN rejected request)');
+  }
+  if (buffer.length < 512) {
+    throw new Error(`suspiciously small file: ${buffer.length} bytes`);
+  }
+
+  let mediaType = null;
+  if (contentType.startsWith('video/')) mediaType = 'video';
+  else if (contentType.startsWith('image/')) mediaType = 'image';
+  else mediaType = sniffType(buffer); // header missing/generic -> check the actual bytes
+
+  if (!mediaType) {
+    throw new Error(`could not determine media type (content-type: ${contentType || 'none'})`);
+  }
+
+  return { buffer, mediaType };
 }
 
 module.exports = {
@@ -140,33 +141,28 @@ module.exports = {
       }
 
       for (let i = 0; i < mediaToDownload.length; i++) {
-        let isVideo = false;
+        let tempPath = null;
         try {
           const media = mediaToDownload[i];
           const mediaUrl = media.url;
 
-          // Ask the CDN what it actually is first; extension/type-field guessing is unreliable for stories
-          const detectedType = await detectMediaType(mediaUrl);
-          isVideo = detectedType
-            ? detectedType === 'video'
-            : (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaUrl) || media.type === 'video');
+          // Download + reliably detect image vs video in one shot
+          const { buffer, mediaType } = await fetchAndDetectMedia(mediaUrl);
+          const isVideo = mediaType === 'video';
+
+          // Write to temp, send from temp, always clean up after (finally below)
+          tempPath = createTempFilePath('story', isVideo ? 'mp4' : 'jpg');
+          fs.writeFileSync(tempPath, buffer);
 
           if (isVideo) {
-            // Stream direct URL to WA often fails for video (IG CDN blocks/timeouts on big fetch).
-            // Pull + validate bytes ourselves first, then hand baileys a Buffer.
-            const vBuf = await fetchMediaBuffer(mediaUrl, true);
-
             await sock.sendMessage(chatId, {
-              video: vBuf,
+              video: fs.readFileSync(tempPath),
               mimetype: 'video/mp4',
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           } else {
-            // Same deal for images: direct-URL stream gets blocked/blank by IG CDN too.
-            const iBuf = await fetchMediaBuffer(mediaUrl, false);
-
             await sock.sendMessage(chatId, {
-              image: iBuf,
+              image: fs.readFileSync(tempPath),
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           }
@@ -176,7 +172,9 @@ module.exports = {
           }
         } catch (mediaError) {
           console.error(`Error downloading story item ${i + 1}:`, mediaError);
-          await extra.reply(`⚠️ Item ${i + 1} failed (${isVideo ? 'video' : 'image'}): ${mediaError.message}`);
+          await extra.reply(`⚠️ Item ${i + 1} failed: ${mediaError.message}`);
+        } finally {
+          if (tempPath) deleteTempFile(tempPath);
         }
       }
     } catch (error) {
