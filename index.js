@@ -215,16 +215,15 @@ async function startBot() {
       }
 
       if (sessionData.startsWith('KUTTU~')) {
-        // New short format: KUTTU~<mongo _id (phone number or WA jid)>
-        const { MongoClient } = require('mongodb');
+        // New short format: KUTTU~<token>. Fetch via plain HTTPS from the
+        // session-generator server (it's the only side that talks to MongoDB).
+        const axios = require('axios');
         const token = sessionData.replace('KUTTU~', '');
-        const mongoClient = new MongoClient(process.env.MONGODB_URI);
-        await mongoClient.connect();
-        const doc = await mongoClient.db('kuttubot').collection('sessions').findOne({ _id: token });
-        await mongoClient.close();
-        if (!doc) throw new Error('No session found in MongoDB for that SESSION_ID');
-        fs.writeFileSync(sessionFile, doc.creds, 'utf8');
-        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (MongoDB)');
+        const sessionServerUrl = process.env.SESSION_SERVER_URL || '';
+        const { data } = await axios.get(`${sessionServerUrl}/qr/session/${token}`);
+        if (!data.creds) throw new Error('No session found for that SESSION_ID');
+        fs.writeFileSync(sessionFile, data.creds, 'utf8');
+        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (via session server)');
       } else {
         // Legacy format: raw base64 creds.json
         const credsData = Buffer.from(sessionData, 'base64');
