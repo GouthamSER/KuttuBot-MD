@@ -3,10 +3,51 @@
  */
 
 const { igdl } = require('ruhend-scraper');
+const axios = require('axios');
 const config = require('../../config');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
+
+// Plain fetch to IG CDN often gets blocked (returns HTML login/error page instead
+// of real media bytes) unless Referer/Origin look like a real IG page request.
+// Validate we actually got image/video bytes before handing to WA, or it shows
+// "wrong file"/can't-open/"image not available" errors.
+async function fetchMediaBuffer(mediaUrl, isVideo) {
+  const res = await axios.get(mediaUrl, {
+    responseType: 'arraybuffer',
+    timeout: 30000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    maxRedirects: 5,
+    validateStatus: (s) => s >= 200 && s < 300,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': 'https://www.instagram.com/',
+      'Origin': 'https://www.instagram.com',
+      'Accept': isVideo ? 'video/mp4,video/*,*/*;q=0.8' : 'image/avif,image/webp,image/*,*/*;q=0.8'
+    }
+  });
+
+  const buffer = Buffer.from(res.data);
+  const contentType = (res.headers['content-type'] || '').toLowerCase();
+  const expectedPrefix = isVideo ? 'video/' : 'image/';
+
+  const looksHtml = buffer.length >= 10 &&
+    /^<!doctype html|^<html/i.test(buffer.toString('utf8', 0, 100).trim());
+
+  if (looksHtml) {
+    throw new Error('blocked: got HTML page instead of media (IG CDN rejected request)');
+  }
+  if (contentType && !contentType.startsWith(expectedPrefix) && contentType !== 'application/octet-stream') {
+    throw new Error(`unexpected content-type: ${contentType}`);
+  }
+  if (buffer.length < 512) {
+    throw new Error(`suspiciously small file: ${buffer.length} bytes`);
+  }
+
+  return buffer;
+}
 
 // Function to extract unique media URLs with simple deduplication
 function extractUniqueMedia(mediaData) {
@@ -40,7 +81,10 @@ function isValidMediaUrl(url) {
 // (especially for story links). Ask the CDN directly what it is.
 async function detectMediaType(mediaUrl) {
   try {
-    const res = await fetch(mediaUrl, { method: 'HEAD' });
+    const res = await fetch(mediaUrl, {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.startsWith('video/')) return 'video';
     if (contentType.startsWith('image/')) return 'image';
@@ -122,13 +166,14 @@ module.exports = {
       
       // Download all media silently without status messages
       for (let i = 0; i < mediaToDownload.length; i++) {
+        let isVideo = false;
         try {
           const media = mediaToDownload[i];
           const mediaUrl = media.url;
           
           // Ask the CDN what it actually is first; extension/type-field guessing is unreliable for stories
           const detectedType = await detectMediaType(mediaUrl);
-          const isVideo = detectedType
+          isVideo = detectedType
             ? detectedType === 'video'
             : (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaUrl) ||
                media.type === 'video' ||
@@ -136,14 +181,21 @@ module.exports = {
                text.includes('/tv/'));
           
           if (isVideo) {
+            // Stream direct URL to WA often fails for video (IG CDN blocks/timeouts on big fetch).
+            // Pull + validate bytes ourselves first, then hand baileys a Buffer.
+            const vBuf = await fetchMediaBuffer(mediaUrl, true);
+
             await sock.sendMessage(chatId, {
-              video: { url: mediaUrl },
+              video: vBuf,
               mimetype: 'video/mp4',
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           } else {
+            // Same deal for images: direct-URL stream gets blocked/blank by IG CDN too.
+            const iBuf = await fetchMediaBuffer(mediaUrl, false);
+
             await sock.sendMessage(chatId, {
-              image: { url: mediaUrl },
+              image: iBuf,
               caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
             }, { quoted: msg });
           }
@@ -155,7 +207,7 @@ module.exports = {
           
         } catch (mediaError) {
           console.error(`Error downloading media ${i + 1}:`, mediaError);
-          // Continue with next media if one fails
+          await extra.reply(`⚠️ Item ${i + 1} failed (${isVideo ? 'video' : 'image'}): ${mediaError.message}`);
         }
       }
     } catch (error) {
