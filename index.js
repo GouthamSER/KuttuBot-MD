@@ -214,22 +214,9 @@ async function startBot() {
         fs.mkdirSync(sessionFolder, { recursive: true });
       }
 
-      if (sessionData.startsWith('KUTTU~')) {
-        // New short format: KUTTU~<token>. Fetch via plain HTTPS from the
-        // session-generator server (it's the only side that talks to MongoDB).
-        const axios = require('axios');
-        const token = sessionData.replace('KUTTU~', '');
-        const sessionServerUrl = process.env.SESSION_SERVER_URL || 'https://qrkuttubot-md.koyeb.app';
-        const { data } = await axios.get(`${sessionServerUrl}/qr/session/${token}`);
-        if (!data.creds) throw new Error('No session found for that SESSION_ID');
-        fs.writeFileSync(sessionFile, data.creds, 'utf8');
-        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (via session server)');
-      } else {
-        // Legacy format: raw base64 creds.json
-        const credsData = Buffer.from(sessionData, 'base64');
-        fs.writeFileSync(sessionFile, credsData);
-        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (legacy base64)');
-      }
+      const credsData = Buffer.from(sessionData, 'base64');
+      fs.writeFileSync(sessionFile, credsData);
+      console.log('📡 Session : 🔑 Retrieved from SESSION_ID');
 
     } catch (e) {
       console.error('📡 Session : ❌ Error processing SESSION_ID:', e.message);
