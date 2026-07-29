@@ -219,7 +219,7 @@ async function startBot() {
         // session-generator server (it's the only side that talks to MongoDB).
         const axios = require('axios');
         const token = sessionData.replace('KUTTU~', '');
-        const sessionServerUrl = process.env.SESSION_SERVER_URL || '';
+        const sessionServerUrl = process.env.SESSION_SERVER_URL || 'https://qrkuttubot-md.koyeb.app';
         const { data } = await axios.get(`${sessionServerUrl}/qr/session/${token}`);
         if (!data.creds) throw new Error('No session found for that SESSION_ID');
         fs.writeFileSync(sessionFile, data.creds, 'utf8');
