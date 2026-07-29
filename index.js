@@ -67,8 +67,7 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion,
-  Browsers
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const config = require('./config');
@@ -214,29 +213,9 @@ async function startBot() {
         fs.mkdirSync(sessionFolder, { recursive: true });
       }
 
-      if (sessionData.startsWith('KUTTU~')) {
-        // New short format: KUTTU~<megaFileId>#<megaKey>
-        const megajs = require('megajs');
-        const [fileId, key] = sessionData.replace('KUTTU~', '').split('#');
-        const megaUrl = `https://mega.nz/file/${fileId}#${key}`;
-        const file = megajs.File.fromURL(megaUrl);
-        const credsData = await new Promise((resolve, reject) => {
-          file.loadAttributes((err) => {
-            if (err) return reject(err);
-            file.downloadBuffer((err, buffer) => {
-              if (err) return reject(err);
-              resolve(buffer);
-            });
-          });
-        });
-        fs.writeFileSync(sessionFile, credsData);
-        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (Mega)');
-      } else {
-        // Legacy format: raw base64 creds.json
-        const credsData = Buffer.from(sessionData, 'base64');
-        fs.writeFileSync(sessionFile, credsData);
-        console.log('📡 Session : 🔑 Retrieved from SESSION_ID (legacy base64)');
-      }
+      const credsData = Buffer.from(sessionData, 'base64');
+      fs.writeFileSync(sessionFile, credsData);
+      console.log('📡 Session : 🔑 Retrieved from SESSION_ID');
 
     } catch (e) {
       console.error('📡 Session : ❌ Error processing SESSION_ID:', e.message);
@@ -254,7 +233,7 @@ async function startBot() {
     logger: suppressedLogger,
     printQRInTerminal: false,
     // Use a common desktop browser signature
-    browser: Browsers.ubuntu('Chrome'),
+    browser: ['Chrome', 'Windows', '10.0'],
     auth: state,
     // Memory optimization: prevent loading old messages into RAM
     syncFullHistory: false,
