@@ -86,10 +86,12 @@ Generate a **pair code** to obtain your session string:
 Paste the returned string into `config.js`:
 
 ```js
-sessionID: 'jhbssd562387bsdfft67....'
+sessionID: 'KUTTU~919876543210'
 ```
 
-Or set via environment variable: `SESSION_ID=jhbssd562387bsdfft67....`
+Or set via environment variable: `SESSION_ID=KUTTU~919876543210`
+
+> **Required:** set a `MONGODB_URI` env var (same connection string used by the session generator) so the bot can fetch your saved session on every startup. Free cluster: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
 
 ### Step 3 — Deploy
 
@@ -154,7 +156,7 @@ node index.js
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `sessionID` | Session string (or empty for QR) | `''` |
+| `sessionID` | Session string, format `KUTTU~<id>` (or empty for QR) | `''` |
 | `prefix` | Command prefix | `.` |
 | `botName` | Display name of the bot | `KuttuBot Mini` |
 | `ownerNumber` | Your WhatsApp number(s) | `['91XXXXXXXXXX']` |
