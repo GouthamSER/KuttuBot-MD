@@ -75,6 +75,7 @@ const handler = require('./handler');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const zlib = require('zlib'); // <-- ADDED THIS FOR DECOMPRESSION
 
 // Remove Puppeteer cache (if some dependency downloaded Chromium into ~/.cache/puppeteer)
 function cleanupPuppeteerCache() {
@@ -200,25 +201,31 @@ async function startBot() {
   const sessionFolder = `./${config.sessionName}`;
   const sessionFile = path.join(sessionFolder, 'creds.json');
 
-  // SESSION_ID support from qrkuttubot-md
-  if (config.sessionID) {
+  // Check if sessionID is provided and process KuttuBotMD! format session
+  if (config.sessionID && config.sessionID.startsWith('KuttuBotMD!')) {
     try {
-      const sessionData = config.sessionID.replace('SESSION_ID=', '').trim();
+      const [header, b64data] = config.sessionID.split('!');
 
-      if (!sessionData) {
-        throw new Error('Invalid SESSION_ID');
+      if (header !== 'KuttuBotMD' || !b64data) {
+        throw new Error("❌ Invalid session format. Expected 'KuttuBotMD!.....'");
       }
 
+      const cleanB64 = b64data.replace('...', '');
+      const compressedData = Buffer.from(cleanB64, 'base64');
+      const decompressedData = zlib.gunzipSync(compressedData);
+
+      // Ensure session folder exists
       if (!fs.existsSync(sessionFolder)) {
         fs.mkdirSync(sessionFolder, { recursive: true });
       }
 
-      const credsData = Buffer.from(sessionData, 'base64');
-      fs.writeFileSync(sessionFile, credsData);
-      console.log('📡 Session : 🔑 Retrieved from SESSION_ID');
+      // Write decompressed session data to creds.json
+      fs.writeFileSync(sessionFile, decompressedData, 'utf8');
+      console.log('📡 Session : 🔑 Retrieved from KuttuBotMD Session');
 
     } catch (e) {
-      console.error('📡 Session : ❌ Error processing SESSION_ID:', e.message);
+      console.error('📡 Session : ❌ Error processing KuttuBotMD session:', e.message);
+      // Continue with normal QR flow if session processing fails
     }
   }
 
@@ -472,7 +479,7 @@ http.createServer((req, res) => {
   }
 
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('KnightBot-Mini Running');
+  res.end('KuttuBotMD Running');
 }).listen(PORT, () => {
   console.log(`🌐 Health server running on port ${PORT}`);
 });
@@ -518,3 +525,4 @@ process.on('unhandledRejection', (err) => {
 
 // Export store for use in commands
 module.exports = { store };
+
