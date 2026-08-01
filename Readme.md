@@ -86,12 +86,9 @@ Generate a **pair code** to obtain your session string:
 Paste the returned string into `config.js`:
 
 ```js
-sessionID: 'KUTTU~919876543210'
+sessionID: 'KuttuBotMD!919876543210'
 ```
 
-Or set via environment variable: `SESSION_ID=KUTTU~919876543210`
-
-> **Required:** set a `MONGODB_URI` env var (same connection string used by the session generator) so the bot can fetch your saved session on every startup. Free cluster: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
 
 ### Step 3 — Deploy
 
