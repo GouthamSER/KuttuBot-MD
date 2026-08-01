@@ -101,7 +101,7 @@ Or set via environment variable: `SESSION_ID=KUTTU~919876543210`
   <img src="https://img.shields.io/badge/Deploy%20on%20Katabump-orange?style=for-the-badge"/>
 </a>
 &nbsp;
-<a href="https://heroku.com">
+<a href="https://heroku.com/deploy?template=https://github.com/GouthamSER/KuttuBot-MD">
   <img src="https://img.shields.io/badge/Deploy%20on%20Heroku-430098?style=for-the-badge&logo=heroku&logoColor=white"/>
 </a>
 &nbsp;
