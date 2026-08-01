@@ -30,8 +30,14 @@ module.exports = {
       await sock.sendMessage(msg.key.remoteJid, { text: weatherText }, { quoted: msg });
       
     } catch (error) {
-      console.error('Error fetching weather:', error);
-      await sock.sendMessage(msg.key.remoteJid, { text: 'Sorry, I could not fetch the weather right now.' }, { quoted: msg });
+      const status = error.response?.status;
+      console.error('Error fetching weather:', status || error.message);
+
+      const text = status === 404
+        ? `❌ City not found: "${args.join(' ')}"\n\nCheck spelling and try again.`
+        : 'Sorry, I could not fetch the weather right now.';
+
+      await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
     }
   }
 };
