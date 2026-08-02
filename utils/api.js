@@ -492,24 +492,22 @@ const APIs = {
   },
   
   // Text to Speech API
-  textToSpeech: async (text) => {
+  textToSpeech: async (text, lang = 'en') => {
+    // Primary: laurine.site custom TTS API
     try {
       const apiUrl = `https://www.laurine.site/api/tts/tts-nova?text=${encodeURIComponent(text)}`;
       const response = await axios.get(apiUrl, {
-        timeout: 30000,
+        timeout: 10000,
         headers: {
           'accept': '*/*',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
-      
+
       if (response.data) {
-        // Check if response.data is a string (direct URL)
         if (typeof response.data === 'string' && (response.data.startsWith('http://') || response.data.startsWith('https://'))) {
           return response.data;
         }
-        
-        // Check nested data structure
         if (response.data.data) {
           const data = response.data.data;
           if (data.URL) return data.URL;
@@ -517,17 +515,18 @@ const APIs = {
           if (data.MP3) return `https://ttsmp3.com/created_mp3_ai/${data.MP3}`;
           if (data.mp3) return `https://ttsmp3.com/created_mp3_ai/${data.mp3}`;
         }
-        
-        // Check top-level URL fields
         if (response.data.URL) return response.data.URL;
         if (response.data.url) return response.data.url;
         if (response.data.MP3) return `https://ttsmp3.com/created_mp3_ai/${response.data.MP3}`;
         if (response.data.mp3) return `https://ttsmp3.com/created_mp3_ai/${response.data.mp3}`;
       }
-      
       throw new Error('Invalid API response structure');
-    } catch (error) {
-      throw new Error(`Failed to generate speech: ${error.message}`);
+    } catch (primaryError) {
+      // Fallback: Google Translate TTS - no key needed, returns audio bytes directly,
+      // so we can hand the URL straight back (caller downloads it exactly like before).
+      // laurine.site went down (DNS failure in prod logs), don't let /tts die with it.
+      const chunk = text.length > 200 ? text.slice(0, 200) : text;
+      return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;
     }
   }
 };

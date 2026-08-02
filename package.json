@@ -23,6 +23,7 @@
     "author": "Goutham Josh",
     "license": "MIT",
     "dependencies": {
+        "dejavu-fonts-ttf": "^2.37.3",
         "@bochilteam/scraper": "^5.0.1",
         "@bochilteam/scraper-facebook": "^5.0.0",
         "@bochilteam/scraper-tiktok": "^5.0.0",
