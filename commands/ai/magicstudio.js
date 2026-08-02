@@ -9,7 +9,7 @@ const BASE = 'https://api.siputzx.my.id/api/ai/magicstudio';
 
 module.exports = {
   name: 'imagine',
-  aliases: ['magic', 'magicai', 'aiimage', 'generate'],
+  aliases: ['magic', 'magicai', 'generate'],
   category: 'ai',
   desc: 'Generate AI art from text prompt',
   usage: 'magicstudio <prompt>',

@@ -13,7 +13,7 @@ const BASE = 'https://api.shizo.top/tools/meme-search';
 
 module.exports = {
   name: 'memesearch',
-  aliases: ['memes', 'sm', 'smeme', 'gifsearch', 'gif'],
+  aliases: ['sm', 'smeme', 'gifsearch', 'gif'],
   category: 'fun',
   desc: 'Search and get memes',
   usage: 'memesearch <query>',

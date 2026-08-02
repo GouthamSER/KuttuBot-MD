@@ -40,11 +40,33 @@ module.exports = {
   }
 };
 
+function resolveFontPath() {
+  if (process.platform === 'win32') return 'C:/Windows/Fonts/arialbd.ttf';
+
+  const candidates = [];
+  try {
+    // Bundled with the app via the "dejavu-fonts-ttf" npm package -
+    // works regardless of what fonts (if any) the host OS has installed.
+    candidates.push(require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf'));
+  } catch (e) {
+    // package not installed - fall through to system paths
+  }
+  candidates.push(
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf'
+  );
+
+  const found = candidates.find(p => p && fs.existsSync(p));
+  if (!found) {
+    throw new Error('No usable font found for attp. Run "npm install dejavu-fonts-ttf".');
+  }
+  return found;
+}
+
 function renderBlinkingVideoWithFfmpeg(text) {
   return new Promise((resolve, reject) => {
-    const fontPath = process.platform === 'win32'
-      ? 'C:/Windows/Fonts/arialbd.ttf'
-      : '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+    const fontPath = resolveFontPath();
 
     const escapeDrawtextText = (s) => s
       .replace(/\\/g, '\\\\')
