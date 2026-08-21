@@ -1,3 +1,13 @@
-build:
-  docker:
-    web: Dockerfile
+services:
+  - type: web
+    runtime: docker
+    name: kuttubot-md
+    repo: https://github.com/GouthamSER/KuttuBot-MD
+    branch: main
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: SESSION_ID
+        sync: false
+      - key: PORT
+        value: 8000
