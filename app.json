@@ -1,9 +1,14 @@
 {
   "name": "Kuttu Bot",
   "description": "WhatsApp MD bot (Baileys)",
-  "repository": "",
+  "repository": "https://github.com/GouthamSER/KuttuBot-MD",
   "keywords": ["whatsapp", "baileys", "bot", "node"],
   "stack": "container",
+  "build": {
+    "docker": {
+      "web": "Dockerfile"
+    }
+  },
   "env": {
     "SESSION_ID": {
       "description": "KuttuBot session string (e.g. KuttuBot!<base64_compressed_data>)",
