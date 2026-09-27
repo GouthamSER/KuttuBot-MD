@@ -4,6 +4,7 @@
  */
 
 const config = require('../../config');
+const database = require('../../database');
 const fs = require('fs');
 const path = require('path');
 
@@ -23,13 +24,19 @@ module.exports = {
           ? 'Only owner and sudo users can use commands'
           : 'Everyone can use commands';
         
+        const blockedList = database.getBlockedGroupsList ? database.getBlockedGroupsList() : [];
+        const blockedInfo = !config.selfMode 
+          ? `\n🚫 Blocked Groups: *${blockedList.length}* (Type .blockedgroups to view)`
+          : '';
+        
         return extra.reply(
           `🤖 *Bot Mode*\n\n` +
           `Current Mode: *${currentMode.toUpperCase()}*\n` +
-          `Status: ${description}\n\n` +
+          `Status: ${description}${blockedInfo}\n\n` +
           `Usage:\n` +
           `  .mode private - Only owner can use\n` +
-          `  .mode public - Everyone can use`
+          `  .mode public - Everyone can use\n` +
+          `  .blockgroup - Block specific group in public mode`
         );
       }
       
