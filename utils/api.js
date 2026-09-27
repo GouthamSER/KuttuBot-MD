@@ -292,7 +292,7 @@ const APIs = {
       }
     };
     
-    const tryRequest = async (getter, attempts = 3) => {
+    const tryRequest = async (getter, attempts = 2) => {
       let lastError;
       for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
@@ -307,18 +307,47 @@ const APIs = {
       throw lastError;
     };
     
-    const apiUrl = `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp3`;
-    const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
-    if (res?.data?.success && res?.data?.downloadURL) {
-      return {
-        download: res.data.downloadURL,
-        title: res.data.title
-      };
+    // Primary endpoint: /download/ytmp3
+    try {
+      const apiUrl = `https://eliteprotech-apis.zone.id/download/ytmp3?url=${encodeURIComponent(youtubeUrl)}`;
+      const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
+      const download = res?.data?.download?.downloadUrl
+        || res?.data?.download?.url
+        || res?.data?.downloadURL
+        || res?.data?.result?.url
+        || res?.data?.url
+        || (typeof res?.data?.download === 'string' ? res.data.download : null);
+
+      if (download) {
+        return {
+          download,
+          title: res?.data?.download?.title || res?.data?.result?.title || res?.data?.title || 'audio',
+          thumbnail: res?.data?.download?.thumbnail || res?.data?.result?.thumbnail || res?.data?.thumbnail
+        };
+      }
+    } catch (err) {
+      // Fallback endpoint: /download/ytdown with format=mp3
+      try {
+        const fallbackUrl = `https://eliteprotech-apis.zone.id/download/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp3`;
+        const res2 = await tryRequest(() => axios.get(fallbackUrl, AXIOS_DEFAULTS));
+        const download = res2?.data?.download?.downloadUrl
+          || res2?.data?.downloadURL
+          || res2?.data?.result?.url
+          || res2?.data?.url;
+        if (download) {
+          return {
+            download,
+            title: res2?.data?.download?.title || res2?.data?.title || 'audio',
+            thumbnail: res2?.data?.download?.thumbnail || res2?.data?.thumbnail
+          };
+        }
+      } catch (e2) {}
+      throw err;
     }
-    throw new Error('EliteProTech ytdown returned no download');
+    throw new Error('EliteProTech ytmp3 returned no download URL');
   },
   
-    getEliteProTechVideoByUrl: async (youtubeUrl) => {
+  getEliteProTechVideoByUrl: async (youtubeUrl) => {
     const AXIOS_DEFAULTS = {
       timeout: 60000,
       headers: {
@@ -327,7 +356,7 @@ const APIs = {
       }
     };
     
-    const tryRequest = async (getter, attempts = 3) => {
+    const tryRequest = async (getter, attempts = 2) => {
       let lastError;
       for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
@@ -342,15 +371,84 @@ const APIs = {
       throw lastError;
     };
     
-    const apiUrl = `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp4`;
-    const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
-    if (res?.data?.success && res?.data?.downloadURL) {
-      return {
-        download: res.data.downloadURL,
-        title: res.data.title
-      };
+    // Primary endpoint: /download/ytmp4
+    try {
+      const apiUrl = `https://eliteprotech-apis.zone.id/download/ytmp4?url=${encodeURIComponent(youtubeUrl)}`;
+      const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
+      const download = res?.data?.result?.url
+        || res?.data?.download?.downloadUrl
+        || res?.data?.download?.url
+        || res?.data?.downloadURL
+        || res?.data?.url
+        || (typeof res?.data?.result === 'string' ? res.data.result : null);
+
+      if (download) {
+        return {
+          download,
+          title: res?.data?.result?.title || res?.data?.download?.title || res?.data?.title || 'video',
+          thumbnail: res?.data?.result?.thumbnail || res?.data?.download?.thumbnail || res?.data?.thumbnail
+        };
+      }
+    } catch (err) {
+      // Fallback endpoint: /download/ytdown with format=mp4
+      try {
+        const fallbackUrl = `https://eliteprotech-apis.zone.id/download/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp4`;
+        const res2 = await tryRequest(() => axios.get(fallbackUrl, AXIOS_DEFAULTS));
+        const download = res2?.data?.result?.url
+          || res2?.data?.download?.downloadUrl
+          || res2?.data?.downloadURL
+          || res2?.data?.url;
+        if (download) {
+          return {
+            download,
+            title: res2?.data?.result?.title || res2?.data?.title || 'video',
+            thumbnail: res2?.data?.result?.thumbnail || res2?.data?.thumbnail
+          };
+        }
+      } catch (e2) {}
+      throw err;
     }
-    throw new Error('EliteProTech ytdown video returned no download');
+    throw new Error('EliteProTech ytmp4 returned no download URL');
+  },
+
+  getRuhendDownloadByUrl: async (youtubeUrl) => {
+    try {
+      const ruhend = require('ruhend-scraper');
+      const fn = ruhend.ytmp3 || ruhend.yta;
+      if (typeof fn === 'function') {
+        const res = await fn(youtubeUrl);
+        const download = res?.audio || res?.download || res?.url || res?.link || (typeof res === 'string' ? res : null);
+        if (download) {
+          return {
+            download,
+            title: res?.title || ''
+          };
+        }
+      }
+    } catch (e) {
+      // continue to throw
+    }
+    throw new Error('ruhend-scraper returned no audio download');
+  },
+
+  getRuhendVideoByUrl: async (youtubeUrl) => {
+    try {
+      const ruhend = require('ruhend-scraper');
+      const fn = ruhend.ytmp4 || ruhend.ytv;
+      if (typeof fn === 'function') {
+        const res = await fn(youtubeUrl);
+        const download = res?.video || res?.download || res?.url || res?.link || (typeof res === 'string' ? res : null);
+        if (download) {
+          return {
+            download,
+            title: res?.title || ''
+          };
+        }
+      }
+    } catch (e) {
+      // continue to throw
+    }
+    throw new Error('ruhend-scraper returned no video download');
   },
   
   // Video Download APIs
@@ -463,7 +561,7 @@ const APIs = {
   // Screenshot Website API
   screenshotWebsite: async (url) => {
     try {
-      const apiUrl = `https://eliteprotech-apis.zone.id/ssweb?url=${encodeURIComponent(url)}`;
+      const apiUrl = `https://eliteprotech-apis.zone.id/tools/ssweb?url=${encodeURIComponent(url)}`;
       const response = await axios.get(apiUrl, {
         timeout: 30000,
         responseType: 'arraybuffer',
