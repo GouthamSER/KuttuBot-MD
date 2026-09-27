@@ -63,6 +63,7 @@ module.exports = {
       // List of API methods to try
       const apiMethods = [
         { name: 'EliteProTech', method: () => APIs.getEliteProTechDownloadByUrl(video.url) },
+        { name: 'RuhendScraper', method: () => APIs.getRuhendDownloadByUrl(video.url) },
         { name: 'Yupra', method: () => APIs.getYupraDownloadByUrl(video.url) },
         { name: 'Okatsu', method: () => APIs.getOkatsuDownloadByUrl(video.url) },
         { name: 'Izumi', method: () => APIs.getIzumiDownloadByUrl(video.url) }
@@ -91,7 +92,8 @@ module.exports = {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': '*/*',
-                'Accept-Encoding': 'identity'
+                'Accept-Encoding': 'identity',
+                'Referer': 'https://savetube.me/'
               }
             });
             audioBuffer = Buffer.from(audioResponse.data);
@@ -120,7 +122,8 @@ module.exports = {
                 headers: {
                   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                   'Accept': '*/*',
-                  'Accept-Encoding': 'identity'
+                  'Accept-Encoding': 'identity',
+                  'Referer': 'https://savetube.me/'
                 }
               });
               const chunks = [];
@@ -222,7 +225,10 @@ module.exports = {
           finalMimetype = 'audio/mpeg';
           finalExtension = 'mp3';
         } catch (convErr) {
-          throw new Error(`Failed to convert ${detectedFormat} to MP3: ${convErr.message}`);
+          console.warn(`Failed to convert ${detectedFormat} to MP3: ${convErr.message}. Sending original audio format.`);
+          finalBuffer = audioBuffer;
+          finalMimetype = actualMimetype;
+          finalExtension = fileExtension;
         }
       }
 

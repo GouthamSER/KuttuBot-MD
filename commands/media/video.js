@@ -69,26 +69,53 @@ module.exports = {
         }, { quoted: msg });
       }
 
-      // Get video: try EliteProTech first, then Yupra, then Okatsu fallback
+      // Get video: try EliteProTech first, then RuhendScraper, then Yupra, then Okatsu fallback
       let videoData;
       try {
         videoData = await APIs.getEliteProTechVideoByUrl(videoUrl);
       } catch (e1) {
         try {
-          videoData = await APIs.getYupraVideoByUrl(videoUrl);
+          videoData = await APIs.getRuhendVideoByUrl(videoUrl);
         } catch (e2) {
-          videoData = await APIs.getOkatsuVideoByUrl(videoUrl);
+          try {
+            videoData = await APIs.getYupraVideoByUrl(videoUrl);
+          } catch (e3) {
+            videoData = await APIs.getOkatsuVideoByUrl(videoUrl);
+          }
         }
       }
 
-      // Send video directly using the download URL
-      await sock.sendMessage(chatId, {
-        video: { url: videoData.download },
-        mimetype: 'video/mp4',
-        fileName: `${(videoData.title || videoTitle || 'video').replace(/[^\w\s-]/g, '')}.mp4`,
-        // Fixed: Use config.botName directly instead of instanceConfig
-        caption: `*${videoData.title || videoTitle || 'Video'}*\n\n> *_Downloaded by ${config.botName}_*`
-      }, { quoted: msg });
+      if (!videoData || !videoData.download) {
+        throw new Error('All video download sources failed');
+      }
+
+      // Send video directly using download URL, fallback to buffer if stream fetch is blocked
+      const fileName = `${(videoData.title || videoTitle || 'video').replace(/[^\w\s-]/g, '')}.mp4`;
+      const caption = `*${videoData.title || videoTitle || 'Video'}*\n\n> *_Downloaded by ${config.botName}_*`;
+
+      try {
+        await sock.sendMessage(chatId, {
+          video: { url: videoData.download },
+          mimetype: 'video/mp4',
+          fileName,
+          caption
+        }, { quoted: msg });
+      } catch (sendErr) {
+        const axios = require('axios');
+        const vidRes = await axios.get(videoData.download, {
+          responseType: 'arraybuffer',
+          timeout: 120000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        await sock.sendMessage(chatId, {
+          video: Buffer.from(vidRes.data),
+          mimetype: 'video/mp4',
+          fileName,
+          caption
+        }, { quoted: msg });
+      }
 
     } catch (error) {
       console.error('[VIDEO] Command Error:', error?.message || error);
