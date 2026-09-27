@@ -77,7 +77,7 @@ Generate a **pair code** to obtain your session string:
 
 <div align="center">
 
-<a href="https://qrkuttubot-md.koyeb.app/">
+<a href="https://qrkuttubot-md.antideploy.com/">
   <img src="https://img.shields.io/badge/Generate%20Pair%20Code-blueviolet?style=for-the-badge"/>
 </a>
 
