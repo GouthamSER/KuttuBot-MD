@@ -159,7 +159,23 @@ node index.js
 | `ownerNumber` | Your WhatsApp number(s) | `['91XXXXXXXXXX']` |
 | `autoTyping` | Show typing indicator on commands | `true` |
 | `autoReact` | Auto-react to messages | `false` |
-| `selfMode` | Owner-only mode | `false` |
+| `selfMode` | Owner-only mode (private mode) | `false` |
+| `blockedGroups` | Array of blacklisted group JIDs while in public mode | `[]` |
+
+---
+
+## 🚫 Antigroup (Block Specific Groups in Public Mode)
+
+When the bot is running in **Public Mode** (`selfMode: false`), it responds to users across all groups. With **Antigroup**, the bot owner can block specific groups so the bot remains completely dormant/silent in those groups:
+
+- **Block current group**: Send `.blockgroup [reason]` inside the group.
+- **Block by JID**: Send `.blockgroup <groupJid> [reason]` (e.g. `.blockgroup 120363024849204892@g.us Toxic group`).
+- **Unblock group**: Send `.unblockgroup [groupJid]`.
+- **List blocked groups**: Send `.listblockedgroups` (or `.blockedgroups`).
+- **Get group/chat JID**: Send `.jid` to copy the current group's JID.
+- **Make bot leave group**: Send `.leave [groupJid]` to have the bot leave gracefully.
+
+> **Storage:** Blocked groups are persisted in [database/antigroup.json](file:///c:/Users/Goutham%20Josh/Downloads/KuttuBot-MD-main/database/antigroup.json) and can also be defined in [config.js](file:///c:/Users/Goutham%20Josh/Downloads/KuttuBot-MD-main/config.js) under `blockedGroups`.
 
 ---
 

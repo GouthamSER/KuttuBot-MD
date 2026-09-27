@@ -21,6 +21,7 @@ module.exports = {
     
     // Bot Behavior
     selfMode: false, // Private mode - only owner can use commands
+    blockedGroups: [], // Array of group JIDs to block when bot is in public mode (e.g., ['120363xxx@g.us'])
     autoRead: false,
     autoTyping: false,
     autoBio: false,

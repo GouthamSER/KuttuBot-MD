@@ -11,6 +11,7 @@ const GROUPS_DB = path.join(DB_PATH, 'groups.json');
 const USERS_DB = path.join(DB_PATH, 'users.json');
 const WARNINGS_DB = path.join(DB_PATH, 'warnings.json');
 const MODS_DB = path.join(DB_PATH, 'mods.json');
+const ANTIGROUP_DB = path.join(DB_PATH, 'antigroup.json');
 
 // Initialize database directory
 if (!fs.existsSync(DB_PATH)) {
@@ -28,6 +29,7 @@ initDB(GROUPS_DB, {});
 initDB(USERS_DB, {});
 initDB(WARNINGS_DB, {});
 initDB(MODS_DB, { moderators: [] });
+initDB(ANTIGROUP_DB, { blockedGroups: {} });
 
 // Read database
 const readDB = (filePath) => {
@@ -162,6 +164,157 @@ const isModerator = (userId) => {
   return mods.includes(userId);
 };
 
+// ==========================================
+// Antigroup / Blocked Groups System
+// ==========================================
+
+const normalizeGroupJid = (groupId) => {
+  if (!groupId) return null;
+  let id = String(groupId).trim();
+  if (!id.includes('@')) {
+    id = `${id}@g.us`;
+  }
+  return id;
+};
+
+const getBlockedGroups = () => {
+  const data = readDB(ANTIGROUP_DB);
+  let map = {};
+
+  if (Array.isArray(data)) {
+    data.forEach(item => {
+      if (typeof item === 'string') {
+        const jid = normalizeGroupJid(item);
+        if (jid) map[jid] = { jid, name: '', reason: 'Manual entry', blockedAt: Date.now(), blockedBy: 'config' };
+      } else if (item && item.jid) {
+        const jid = normalizeGroupJid(item.jid);
+        if (jid) map[jid] = { ...item, jid };
+      }
+    });
+  } else if (data && typeof data === 'object') {
+    if (data.blockedGroups && typeof data.blockedGroups === 'object' && !Array.isArray(data.blockedGroups)) {
+      map = { ...data.blockedGroups };
+    } else if (data.blockedGroups && Array.isArray(data.blockedGroups)) {
+      data.blockedGroups.forEach(item => {
+        if (typeof item === 'string') {
+          const jid = normalizeGroupJid(item);
+          if (jid) map[jid] = { jid, name: '', reason: 'Manual entry', blockedAt: Date.now(), blockedBy: 'config' };
+        } else if (item && item.jid) {
+          const jid = normalizeGroupJid(item.jid);
+          if (jid) map[jid] = { ...item, jid };
+        }
+      });
+    } else {
+      Object.entries(data).forEach(([key, val]) => {
+        if (key.endsWith('@g.us') || /^\d+$/.test(key)) {
+          const jid = normalizeGroupJid(key);
+          if (jid) {
+            map[jid] = (typeof val === 'object' && val !== null)
+              ? { ...val, jid }
+              : { jid, name: '', reason: 'Manual entry', blockedAt: Date.now(), blockedBy: 'config' };
+          }
+        }
+      });
+    }
+  }
+
+  // Also include any hardcoded blocked groups from config.js
+  try {
+    delete require.cache[require.resolve('./config')];
+    const liveConfig = require('./config');
+    if (Array.isArray(liveConfig.blockedGroups)) {
+      liveConfig.blockedGroups.forEach(bg => {
+        const jid = normalizeGroupJid(bg);
+        if (jid && !map[jid]) {
+          map[jid] = { jid, name: '', reason: 'Config blacklist', blockedAt: Date.now(), blockedBy: 'config' };
+        }
+      });
+    }
+  } catch (e) {
+    // Continue if config cannot be read
+  }
+
+  return map;
+};
+
+const isGroupBlocked = (groupId) => {
+  if (!groupId) return false;
+  const jid = normalizeGroupJid(groupId);
+  if (!jid) return false;
+
+  const blockedMap = getBlockedGroups();
+  return Boolean(blockedMap[jid]);
+};
+
+const blockGroup = (groupId, options = {}) => {
+  const jid = normalizeGroupJid(groupId);
+  if (!jid) return false;
+
+  let rawData = readDB(ANTIGROUP_DB);
+  if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+    rawData = { blockedGroups: {} };
+  }
+  if (!rawData.blockedGroups || typeof rawData.blockedGroups !== 'object' || Array.isArray(rawData.blockedGroups)) {
+    rawData.blockedGroups = {};
+  }
+
+  rawData.blockedGroups[jid] = {
+    jid,
+    name: options.name || '',
+    reason: options.reason || 'Blocked by owner',
+    blockedAt: Date.now(),
+    blockedBy: options.blockedBy || 'owner'
+  };
+
+  return writeDB(ANTIGROUP_DB, rawData);
+};
+
+const unblockGroup = (groupId) => {
+  const jid = normalizeGroupJid(groupId);
+  if (!jid) return false;
+
+  let rawData = readDB(ANTIGROUP_DB);
+  if (!rawData || typeof rawData !== 'object') return false;
+
+  let modified = false;
+  if (Array.isArray(rawData)) {
+    const prevLen = rawData.length;
+    rawData = rawData.filter(item => {
+      const itemJid = typeof item === 'string' ? normalizeGroupJid(item) : normalizeGroupJid(item?.jid);
+      return itemJid !== jid;
+    });
+    if (rawData.length !== prevLen) {
+      writeDB(ANTIGROUP_DB, rawData);
+      return true;
+    }
+    return false;
+  }
+
+  if (rawData.blockedGroups && typeof rawData.blockedGroups === 'object') {
+    if (rawData.blockedGroups[jid]) {
+      delete rawData.blockedGroups[jid];
+      modified = true;
+    }
+  }
+
+  if (rawData[jid]) {
+    delete rawData[jid];
+    modified = true;
+  }
+
+  if (modified) {
+    writeDB(ANTIGROUP_DB, rawData);
+    return true;
+  }
+
+  return false;
+};
+
+const getBlockedGroupsList = () => {
+  const map = getBlockedGroups();
+  return Object.values(map);
+};
+
 module.exports = {
   getGroupSettings,
   updateGroupSettings,
@@ -174,5 +327,10 @@ module.exports = {
   getModerators,
   addModerator,
   removeModerator,
-  isModerator
+  isModerator,
+  getBlockedGroups,
+  isGroupBlocked,
+  blockGroup,
+  unblockGroup,
+  getBlockedGroupsList
 };

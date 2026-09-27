@@ -391,7 +391,11 @@ const handleMessage = async (sock, msg) => {
       delete require.cache[require.resolve('./config')];
       const config = require('./config');
 
-      if (config.autoReact && msg.message && !msg.key.fromMe) {
+      // Skip auto-react in blocked groups
+      const isGroupChat = from && from.endsWith('@g.us');
+      if (isGroupChat && database.isGroupBlocked(from)) {
+        // Silently skip auto-react in blocked groups
+      } else if (config.autoReact && msg.message && !msg.key.fromMe) {
         const content = msg.message.ephemeralMessage?.message || msg.message;
         const text =
           content.conversation ||
@@ -445,6 +449,13 @@ const handleMessage = async (sock, msg) => {
     const sender = msg.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : msg.key.participant || msg.key.remoteJid;
     const isGroup = from.endsWith('@g.us'); // Should always be true now due to DM block above
     
+    // Check if group is blocked (Antigroup feature for public mode)
+    // Non-owners are completely blocked from triggering commands or events in blocked groups
+    const senderIsOwner = isOwner(sender);
+    if (isGroup && database.isGroupBlocked(from) && !senderIsOwner) {
+      return; // Silently ignore all non-owner interactions in blocked groups
+    }
+
     // Fetch group metadata immediately if it's a group
     const groupMetadata = isGroup ? await getGroupMetadata(sock, from) : null;
     
@@ -850,6 +861,11 @@ const handleGroupUpdate = async (sock, update) => {
     
     // Validate group JID before processing
     if (!id || !id.endsWith('@g.us')) {
+      return;
+    }
+    
+    // Antigroup check - do not send welcome/goodbye in blocked groups
+    if (database.isGroupBlocked(id)) {
       return;
     }
     
@@ -1404,5 +1420,6 @@ module.exports = {
   isBotAdmin,
   isMod,
   getGroupMetadata,
-  findParticipant
+  findParticipant,
+  isGroupBlocked: database.isGroupBlocked
 };

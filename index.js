@@ -420,9 +420,11 @@ async function startBot() {
         }
         if (from.endsWith('@g.us')) {
           try {
-            const groupMetadata = await handler.getGroupMetadata(sock, msg.key.remoteJid);
-            if (groupMetadata) {
-              await handler.handleAntilink(sock, msg, groupMetadata);
+            if (!handler.isGroupBlocked || !handler.isGroupBlocked(from)) {
+              const groupMetadata = await handler.getGroupMetadata(sock, msg.key.remoteJid);
+              if (groupMetadata) {
+                await handler.handleAntilink(sock, msg, groupMetadata);
+              }
             }
           } catch (error) {
             // Silently handle
