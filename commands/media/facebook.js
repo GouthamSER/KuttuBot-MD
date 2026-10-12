@@ -5,6 +5,7 @@
 const { facebookdl } = require('@bochilteam/scraper-facebook');
 const axios = require('axios');
 const config = require('../../config');
+const APIs = require('../../utils/api');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
@@ -66,7 +67,21 @@ module.exports = {
       });
       
       try {
-        // Use @bochilteam/scraper-facebook
+        // Knight API first; fall back to @bochilteam/scraper-facebook
+        try {
+          const k = await APIs.getKnightMedia('facebook', url);
+          const kv = k.media.find(m => m.type !== 'image') || k.media[0];
+          const kCaption = `*DOWNLOADED BY ${config.botName.toUpperCase()}*`;
+          try {
+            await sock.sendMessage(extra.from, { video: { url: kv.url }, mimetype: 'video/mp4', caption: kCaption }, { quoted: msg });
+          } catch (sendErr) {
+            const r = await axios.get(kv.url, { responseType: 'arraybuffer', timeout: 120000, maxContentLength: 100 * 1024 * 1024 });
+            await sock.sendMessage(extra.from, { video: Buffer.from(r.data), mimetype: 'video/mp4', caption: kCaption }, { quoted: msg });
+          }
+          return;
+        } catch (knightErr) {
+          console.log('Knight facebook failed, falling back to scraper:', knightErr.message);
+        }
         const data = await facebookdl(url);
         
         if (!data || !data.video || !Array.isArray(data.video) || data.video.length === 0) {

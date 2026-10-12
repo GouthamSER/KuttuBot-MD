@@ -76,7 +76,7 @@ module.exports = {
         let videoUrl = null;
         let title = null;
         
-        // Try Siputzx API first
+        // Knight API first (inside getTikTokDownload), then Siputzx
         try {
           const result = await APIs.getTikTokDownload(url);
           videoUrl = result.videoUrl;

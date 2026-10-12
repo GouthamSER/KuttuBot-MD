@@ -72,6 +72,11 @@ module.exports = {
       // Get video: try EliteProTech first, then RuhendScraper, then Yupra, then Okatsu fallback
       let videoData;
       try {
+        videoData = await APIs.getKnightVideo(videoUrl);
+      } catch (e0) {
+        console.log('[VIDEO] Knight failed:', e0?.message);
+      }
+      if (!videoData || !videoData.download) try {
         videoData = await APIs.getEliteProTechVideoByUrl(videoUrl);
       } catch (e1) {
         try {

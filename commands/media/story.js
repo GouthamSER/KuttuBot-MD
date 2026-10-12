@@ -3,7 +3,7 @@
  */
 
 const fs = require('fs');
-const { igdl } = require('ruhend-scraper');
+const { igdlWithKnight: igdl } = require('../../utils/api');
 const axios = require('axios');
 const config = require('../../config');
 const { createTempFilePath, deleteTempFile } = require('../../utils/tempManager');

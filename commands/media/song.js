@@ -62,6 +62,7 @@ module.exports = {
       
       // List of API methods to try
       const apiMethods = [
+        { name: 'Knight', method: () => APIs.getKnightAudio(video.url) },
         { name: 'EliteProTech', method: () => APIs.getEliteProTechDownloadByUrl(video.url) },
         { name: 'RuhendScraper', method: () => APIs.getRuhendDownloadByUrl(video.url) },
         { name: 'Yupra', method: () => APIs.getYupraDownloadByUrl(video.url) },

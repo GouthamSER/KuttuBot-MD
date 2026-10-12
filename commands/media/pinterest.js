@@ -4,6 +4,7 @@
 
 const axios = require('axios');
 const config = require('../../config');
+const APIs = require('../../utils/api');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
@@ -67,7 +68,23 @@ module.exports = {
         react: { text: '📥', key: msg.key }
       });
       
-      // Call Pinterest API
+      // Knight API first
+      try {
+        const k = await APIs.getKnightMedia('pinterest', pinterestUrl);
+        const kvid = k.media.find(m => m.type === 'video');
+        const kcap = `📌 *${k.title || 'Pinterest Pin'}*\n\n*Downloaded by ${config.botName}*`;
+        if (kvid) {
+          const vr = await axios.get(kvid.url, { responseType: 'arraybuffer', timeout: 120000, maxContentLength: 100 * 1024 * 1024, headers: { 'Referer': 'https://www.pinterest.com/' } });
+          await sock.sendMessage(extra.from, { video: Buffer.from(vr.data), caption: kcap }, { quoted: msg });
+        } else {
+          await sock.sendMessage(extra.from, { image: { url: k.media[0].url }, caption: kcap }, { quoted: msg });
+        }
+        return;
+      } catch (knightErr) {
+        console.log('Knight pinterest failed, falling back to nexray:', knightErr.message);
+      }
+
+      // Fallback: Call Pinterest API
       const apiUrl = `https://api.nexray.web.id/downloader/pinterest?url=${encodeURIComponent(pinterestUrl)}`;
       
       let response;

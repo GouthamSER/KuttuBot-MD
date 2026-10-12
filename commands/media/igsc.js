@@ -3,7 +3,7 @@
  * igsc - Convert Instagram media to cropped square sticker
  */
 
-const { igdl } = require('ruhend-scraper');
+const { igdlWithKnight: igdl } = require('../../utils/api');
 const axios = require('axios');
 const { exec } = require('child_process');
 const fs = require('fs');

@@ -2,7 +2,7 @@
  * Instagram Downloader - Using ruhend-scraper
  */
 
-const { igdl } = require('ruhend-scraper');
+const { igdlWithKnight: igdl } = require('../../utils/api');
 const axios = require('axios');
 const config = require('../../config');
 
