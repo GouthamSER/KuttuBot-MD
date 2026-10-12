@@ -16,6 +16,10 @@ module.exports = {
     updateZipUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.zip', // Used for local/VPS update (ZIP)
     updateTarUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.tar.gz', // Used for Heroku build trigger (tar.gz required by Platform API)
     
+    // Knight API (primary downloader, others are fallback)
+    knightApiBase: process.env.KNIGHT_API_BASE || 'https://knightbotapi.stream',
+    knightApiKey: process.env.KNIGHT_API_KEY || 'knight',
+
     // Sticker Configuration
     packname: 'Kuttu Bot Mini',
     
