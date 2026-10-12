@@ -11,7 +11,7 @@
 
 <br/>
 
-<img src="assets/bot_image.jpg" alt="KuttuBot MD" width="240"/>
+<img src="utils/bot_image.jpg" alt="KuttuBot MD" width="240"/>
 
 <br/>
 <br/>
