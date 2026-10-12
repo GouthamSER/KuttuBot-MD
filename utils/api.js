@@ -17,11 +17,20 @@ const api = axios.create({
 // Knight API - primary downloader. Every command tries this FIRST, then falls
 // back to the older APIs/scrapers. Response: { success:true, result:{ download } }
 // ---------------------------------------------------------------------------
+// Config-safe: works even if config.js is an old copy without knight keys,
+// or env base has no protocol / trailing slash.
+const knightBase = () => {
+  let b = String(config.knightApiBase || process.env.KNIGHT_API_BASE || 'https://knightbotapi.stream').trim();
+  if (!/^https?:\/\//i.test(b)) b = 'https://' + b;
+  return b.replace(/\/+$/, '');
+};
+const knightKey = () => String(config.knightApiKey || process.env.KNIGHT_API_KEY || 'knight').trim();
+
 const knightGet = async (path, params = {}) => {
-  const res = await axios.get(`${config.knightApiBase}${path}`, {
-    params: { apikey: config.knightApiKey, ...params },
+  const res = await axios.get(`${knightBase()}${path}`, {
+    params: { apikey: knightKey(), ...params },
     headers: {
-      'X-API-Key': config.knightApiKey,
+      'X-API-Key': knightKey(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'application/json, text/plain, */*'
     },
