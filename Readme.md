@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00c6ff,100:0072ff&height=200&section=header&text=KuttuBot%20Mini%20MD&fontSize=48&fontColor=ffffff&fontAlignY=38&desc=WhatsApp%20MD%20Bot%20powered%20by%20Baileys&descAlignY=58&descFontColor=ffffffcc" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00c6ff,100:0072ff&height=200&section=header&text=KuttuBot%20MD&fontSize=48&fontColor=ffffff&fontAlignY=38&desc=WhatsApp%20MD%20Bot%20powered%20by%20Baileys&descAlignY=58&descFontColor=ffffffcc" />
 
 <br/>
 
@@ -11,7 +11,7 @@
 
 <br/>
 
-<img src="utils/bot_image.jpg" alt="KuttuBot Mini" width="220" style="border-radius:16px"/>
+<img src="assets/bot_image.jpg" alt="KuttuBot MD" width="240"/>
 
 <br/>
 <br/>
@@ -33,12 +33,12 @@
 | 🤖 AI | 3 |
 | 🌸 Anime | 9 |
 | 🎉 Fun | 13 |
-| ⚙️ General | 20 |
-| 🎬 Media | 9 |
-| 👑 Owner | 14 |
+| ⚙️ General | 21 |
+| 🎬 Media | 11 |
+| 👑 Owner | 18 |
 | ✍️ Text Maker | 18 |
 | 🔧 Utility | 3 |
-| **Total** | **110+** |
+| **Total** | **117** |
 
 ---
 
@@ -52,7 +52,7 @@
 - 👋 **Welcome / Goodbye** — image-based join/leave messages with profile picture
 - 🤖 **AI Commands** — ChatGPT text, image generation, magic studio
 - 🎨 **Text Maker** — 18 stylized text effects (fire, neon, glitch, matrix, and more)
-- 📲 **Media Downloaders** — YouTube (song/video), TikTok, Instagram, Facebook, Pinterest
+- 📲 **Media Downloaders** — YouTube (song/video), TikTok, Instagram, Facebook, Pinterest. **Knight API is tried first**, then automatic fallback to other APIs/scrapers
 - ⚡ **RAM-Optimized** — streaming media handling + automatic temp file cleanup
 - 🔄 **Auto React** — react to commands or all messages with emoji
 - 🛡️ **Bot Admin Checks** — live metadata fetching for reliable admin operations
@@ -155,7 +155,9 @@ node index.js
 |-----|-------------|---------|
 | `sessionID` | Session string, format `KUTTU~<id>` (or empty for QR) | `''` |
 | `prefix` | Command prefix | `.` |
-| `botName` | Display name of the bot | `KuttuBot Mini` |
+| `botName` | Display name of the bot | `Kuttu Bot Mini` |
+| `knightApiKey` | Key for Knight API (primary downloader). Env: `KNIGHT_API_KEY` | `knight` |
+| `knightApiBase` | Knight API base URL. Env: `KNIGHT_API_BASE` | `https://knightbotapi.stream` |
 | `ownerNumber` | Your WhatsApp number(s) | `['91XXXXXXXXXX']` |
 | `autoTyping` | Show typing indicator on commands | `true` |
 | `autoReact` | Auto-react to messages | `false` |
@@ -179,6 +181,23 @@ When the bot is running in **Public Mode** (`selfMode: false`), it responds to u
 
 ---
 
+## 📥 Downloader API Order
+
+Every downloader tries **[Knight API](https://knightbotapi.stream/)** first. If it fails, the bot falls back automatically.
+
+| Command | Order |
+|---------|-------|
+| `.song` | Knight → EliteProTech → Ruhend → Yupra → Okatsu → Izumi |
+| `.video` | Knight → EliteProTech → Ruhend → Yupra → Okatsu |
+| `.tiktok` | Knight → Siputzx → ttdl |
+| `.facebook` | Knight → bochilteam scraper |
+| `.pinterest` | Knight → nexray |
+| `.instagram` / `.story` / `.igs` | Knight → ruhend `igdl` |
+
+Set your own key: `export KNIGHT_API_KEY=your_key` (or edit `config.js`).
+
+---
+
 ## 🎵 Media → MP3
 
 Reply to any **video** (or audio) message and send:
@@ -199,6 +218,7 @@ The bot converts it to a downloadable `.mp3` file using FFmpeg and sends it back
 
 ```
 KuttuBot-mini-MD/
+├── assets/           # logo.svg, logo.png
 ├── commands/
 │   ├── admin/        # Group management (kick, mute, warn, antilink …)
 │   ├── ai/           # AI features (ChatGPT, image gen)
