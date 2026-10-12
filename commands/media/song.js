@@ -38,7 +38,20 @@ module.exports = {
       let video;
       
       if (text.includes('youtube.com') || text.includes('youtu.be')) {
-        video = { url: text };
+        video = { url: text.trim() };
+        // Fill title/thumbnail so the preview message never gets undefined fields
+        try {
+          const idMatch = video.url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([a-zA-Z0-9_-]{11})/);
+          if (idMatch) {
+            video.thumbnail = `https://i.ytimg.com/vi/${idMatch[1]}/hqdefault.jpg`;
+            const info = await yts({ videoId: idMatch[1] }).catch(() => null);
+            if (info) {
+              video.title = info.title;
+              video.timestamp = info.timestamp;
+              video.thumbnail = info.thumbnail || video.thumbnail;
+            }
+          }
+        } catch (e) {}
       } else {
         const search = await yts(text);
         if (!search || !search.videos.length) {
@@ -50,10 +63,16 @@ module.exports = {
       }
       
       // Inform user
-      await sock.sendMessage(chatId, {
-        image: { url: video.thumbnail },
-        caption: `🎵 Downloading: *${video.title}*\n⏱ Duration: ${video.timestamp}`
-      }, { quoted: msg });
+      const previewCaption = `🎵 Downloading: *${video.title || 'audio'}*${video.timestamp ? `\n⏱ Duration: ${video.timestamp}` : ''}`;
+      try {
+        if (video.thumbnail) {
+          await sock.sendMessage(chatId, { image: { url: video.thumbnail }, caption: previewCaption }, { quoted: msg });
+        } else {
+          await sock.sendMessage(chatId, { text: previewCaption }, { quoted: msg });
+        }
+      } catch (previewErr) {
+        console.log('Song preview failed:', previewErr.message);
+      }
       
       // Try multiple APIs with fallback chain
       let audioData;
