@@ -3,11 +3,7 @@ const path = require('path')
 const { spawn, execSync } = require('child_process')
 
 function getFFmpegPath() {
-  try {
-    return execSync('which ffmpeg').toString().trim()
-  } catch {
-    return process.env.FFMPEG_PATH || '/usr/bin/ffmpeg'
-  }
+  return require('./ffmpeg')
 }
 
 function ffmpeg(buffer, args = [], ext = '', ext2 = '') {
