@@ -3,6 +3,7 @@
  */
 
 const axios = require('axios');
+const config = require('../config');
 
 const api = axios.create({
   timeout: 30000,
@@ -11,8 +12,62 @@ const api = axios.create({
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Knight API - primary downloader. Every command tries this FIRST, then falls
+// back to the older APIs/scrapers. Response: { success:true, result:{ download } }
+// ---------------------------------------------------------------------------
+const knightGet = async (path, params = {}) => {
+  const res = await axios.get(`${config.knightApiBase}${path}`, {
+    params: { apikey: config.knightApiKey, ...params },
+    headers: {
+      'X-API-Key': config.knightApiKey,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*'
+    },
+    timeout: 60000
+  });
+  const data = res.data;
+  if (!data || data.success === false || !data.result) {
+    throw new Error(`Knight API ${path} returned no result`);
+  }
+  return data.result;
+};
+
+// Pull every media url out of a Knight result (string, array, or nested fields)
+const knightExtractMedia = (result) => {
+  const out = [];
+  const seen = new Set();
+  const push = (u, type) => {
+    if (typeof u !== 'string' || !/^https?:\/\//i.test(u) || seen.has(u)) return;
+    seen.add(u);
+    out.push({ url: u, type: type || (/\.(mp4|mov|webm|mkv)(\?|$)/i.test(u) ? 'video' : (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(u) ? 'image' : undefined)) });
+  };
+  const walk = (v, type) => {
+    if (!v) return;
+    if (typeof v === 'string') return push(v, type);
+    if (Array.isArray(v)) return v.forEach(x => walk(x, type));
+    if (typeof v === 'object') {
+      const t = v.type === 'video' || v.type === 'image' ? v.type : type;
+      const direct = v.download || v.url || v.link || v.video || v.image;
+      if (direct) walk(direct, t);
+    }
+  };
+  walk(result.download);
+  if (!out.length) { walk(result.items); walk(result.medias); walk(result.media); walk(result.video); walk(result.url); }
+  return out;
+};
+
+const knightMeta = (result) => ({
+  title: result.title || result.caption || result.desc || '',
+  thumbnail: result.thumbnail || result.thumb || result.cover || ''
+});
+
 // API Endpoints
 const APIs = {
+  knightGet,
+  knightExtractMedia,
+
   // Image Generation
   generateImage: async (prompt) => {
     try {
@@ -150,6 +205,50 @@ const APIs = {
     }
   },
   
+
+  // ---- Knight API (primary) ----
+  getKnightAudio: async (youtubeUrlOrQuery) => {
+    const isUrl = /^https?:\/\//i.test(youtubeUrlOrQuery);
+    const result = await knightGet('/api/download/ytaudio', {
+      format: '128kbps',
+      ...(isUrl ? { url: youtubeUrlOrQuery } : { query: youtubeUrlOrQuery })
+    });
+    const media = knightExtractMedia(result);
+    if (!media.length) throw new Error('Knight ytaudio returned no download');
+    return { download: media[0].url, ...knightMeta(result) };
+  },
+
+  getKnightVideo: async (youtubeUrlOrQuery, format = '720p') => {
+    const isUrl = /^https?:\/\//i.test(youtubeUrlOrQuery);
+    const result = await knightGet('/api/download/ytmp4', {
+      format,
+      ...(isUrl ? { url: youtubeUrlOrQuery } : { query: youtubeUrlOrQuery })
+    });
+    const media = knightExtractMedia(result);
+    if (!media.length) throw new Error('Knight ytmp4 returned no download');
+    return { download: media[0].url, ...knightMeta(result) };
+  },
+
+  // service: tiktok | instagram | facebook | pinterest | twitter
+  // returns { media:[{url,type}], title, thumbnail }
+  getKnightMedia: async (service, url) => {
+    const result = await knightGet(`/api/download/${service}`, { url });
+    const media = knightExtractMedia(result);
+    if (!media.length) throw new Error(`Knight ${service} returned no download`);
+    return { media, ...knightMeta(result) };
+  },
+
+  // Drop-in for ruhend igdl(): Knight first, then igdl. Returns { data:[{url,type}] }
+  igdlWithKnight: async (url) => {
+    try {
+      const k = await APIs.getKnightMedia('instagram', url);
+      return { data: k.media };
+    } catch (e) {
+      console.log('Knight instagram failed, falling back to igdl:', e.message);
+    }
+    return await require('ruhend-scraper').igdl(url);
+  },
+
   // Song Download APIs
   getIzumiDownloadByUrl: async (youtubeUrl) => {
     const AXIOS_DEFAULTS = {
@@ -522,6 +621,13 @@ const APIs = {
   
   // TikTok Download API
   getTikTokDownload: async (url) => {
+    try {
+      const k = await APIs.getKnightMedia('tiktok', url);
+      const vid = k.media.find(m => m.type !== 'image') || k.media[0];
+      return { videoUrl: vid.url, title: k.title || 'TikTok Video' };
+    } catch (e) {
+      console.log('Knight tiktok failed, falling back to Siputzx:', e.message);
+    }
     const apiUrl = `https://api.siputzx.my.id/api/d/tiktok?url=${encodeURIComponent(url)}`;
     try {
       const response = await axios.get(apiUrl, { 
