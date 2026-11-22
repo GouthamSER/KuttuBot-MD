@@ -247,15 +247,56 @@ const APIs = {
     return { media, ...knightMeta(result) };
   },
 
-  // Drop-in for ruhend igdl(): Knight first, then igdl. Returns { data:[{url,type}] }
+  // Drop-in for ruhend igdl(): Knight (retry on 429) -> siputzx -> ruhend. Returns { data:[{url,type}] }
+  // Every provider's output is filtered: ruhend/snapsave sometimes returns junk like
+  // "https://snapsave.app&dl=1" (no real media host) -> ENOTFOUND.
   igdlWithKnight: async (url) => {
-    try {
-      const k = await APIs.getKnightMedia('instagram', url);
-      return { data: k.media };
-    } catch (e) {
-      console.log('Knight instagram failed, falling back to igdl:', e.message);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const isRealMediaUrl = (u) => {
+      try {
+        const x = new URL(u);
+        if (!/^https?:$/.test(x.protocol)) return false;
+        if (!x.hostname.includes('.') || /[&=?]/.test(x.hostname)) return false;
+        if (/^(www\.)?snapsave\.app$/i.test(x.hostname) && (x.pathname === '/' || x.pathname === '')) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const clean = (arr) => (Array.isArray(arr) ? arr : []).filter((m) => m && isRealMediaUrl(m.url));
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const k = await APIs.getKnightMedia('instagram', url);
+        const data = clean(k.media);
+        if (data.length) return { data };
+        break;
+      } catch (e) {
+        const rateLimited = /429/.test(e.message || '');
+        console.log(`Knight instagram failed (try ${attempt + 1}/3): ${e.message}`);
+        if (!rateLimited || attempt === 2) break;
+        await sleep(1500 * (attempt + 1));
+      }
     }
-    return await require('ruhend-scraper').igdl(url);
+
+    try {
+      const r = await APIs.igDownload(url);
+      const data = clean(knightExtractMedia({ download: (r && (r.data || r.result)) || [] }));
+      if (data.length) return { data };
+      console.log('siputzx igdl returned no valid media');
+    } catch (e) {
+      console.log('siputzx igdl failed:', e.message);
+    }
+
+    try {
+      const res = await require('ruhend-scraper').igdl(url);
+      const data = clean(res && res.data);
+      if (data.length) return { ...res, data };
+      console.log('ruhend igdl returned no valid media');
+    } catch (e) {
+      console.log('ruhend igdl failed:', e.message);
+    }
+    throw new Error('Instagram download failed: all providers failed or rate-limited');
   },
 
   // Song Download APIs
@@ -415,6 +456,7 @@ const APIs = {
       throw lastError;
     };
     
+    let primaryErr = null;
     // Primary endpoint: /download/ytmp3
     try {
       const apiUrl = `https://eliteprotech-apis.zone.id/download/ytmp3?url=${encodeURIComponent(youtubeUrl)}`;
@@ -434,6 +476,9 @@ const APIs = {
         };
       }
     } catch (err) {
+      primaryErr = err;
+    }
+    {
       // Fallback endpoint: /download/ytdown with format=mp3
       try {
         const fallbackUrl = `https://eliteprotech-apis.zone.id/download/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp3`;
@@ -450,8 +495,8 @@ const APIs = {
           };
         }
       } catch (e2) {}
-      throw err;
     }
+    if (primaryErr) throw primaryErr;
     throw new Error('EliteProTech ytmp3 returned no download URL');
   },
   
@@ -479,6 +524,7 @@ const APIs = {
       throw lastError;
     };
     
+    let primaryErr = null;
     // Primary endpoint: /download/ytmp4
     try {
       const apiUrl = `https://eliteprotech-apis.zone.id/download/ytmp4?url=${encodeURIComponent(youtubeUrl)}`;
@@ -498,6 +544,9 @@ const APIs = {
         };
       }
     } catch (err) {
+      primaryErr = err;
+    }
+    {
       // Fallback endpoint: /download/ytdown with format=mp4
       try {
         const fallbackUrl = `https://eliteprotech-apis.zone.id/download/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp4`;
@@ -514,8 +563,8 @@ const APIs = {
           };
         }
       } catch (e2) {}
-      throw err;
     }
+    if (primaryErr) throw primaryErr;
     throw new Error('EliteProTech ytmp4 returned no download URL');
   },
 
@@ -665,6 +714,7 @@ const APIs = {
           title = response.data.data.metadata?.title || 'TikTok Video';
         }
         
+        if (!videoUrl) throw new Error('No video url in response');
         return { videoUrl, title };
       }
       throw new Error('Invalid API response');
