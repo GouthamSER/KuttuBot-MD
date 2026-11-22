@@ -289,6 +289,15 @@ const APIs = {
     }
 
     try {
+      const r = await require('btch-downloader').igdl(url);
+      const data = clean(knightExtractMedia({ download: (r && (r.result || r.data)) || [] }));
+      if (data.length) return { data };
+      console.log('btch igdl returned no valid media');
+    } catch (e) {
+      console.log('btch igdl failed:', e.message);
+    }
+
+    try {
       const res = await require('ruhend-scraper').igdl(url);
       const data = clean(res && res.data);
       if (data.length) return { ...res, data };
