@@ -2,7 +2,8 @@
  * Instagram Downloader - Using ruhend-scraper
  */
 
-const { igdlWithKnight: igdl } = require('../../utils/api');
+const APIs = require('../../utils/api');
+const igdl = APIs.igdlWithKnight;
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
@@ -159,18 +160,28 @@ module.exports = {
         return extra.reply('That is not a valid Instagram link. Please provide a valid Instagram post, reel, or video link.');
       }
       
+      const cleanUrl = APIs.cleanInstagramUrl(text);
+      if (!cleanUrl) {
+        return extra.reply('That is not a valid Instagram link. Please provide a valid Instagram post, reel, or video link.');
+      }
+
       await sock.sendMessage(chatId, {
         react: { text: '📥', key: msg.key }
       });
       
       let downloadData;
       try {
-        downloadData = await igdl(text);
+        downloadData = await igdl(cleanUrl);
       } catch (e) {
         console.error('igdl failed:', e.message);
-        return extra.reply('❌ Instagram download failed (provider rate-limited). Try again in a minute.');
+        const reasons = {
+          RATE_LIMIT: '❌ Instagram download failed: download servers are rate-limited. Try again in a minute.',
+          TIMEOUT: '❌ Instagram download failed: download servers timed out. Try again shortly.',
+          NO_MEDIA: '❌ Could not get media. The post may be private, deleted, or Instagram is blocking the downloaders right now.'
+        };
+        return extra.reply(reasons[e.code] || '❌ Instagram download failed. Try again later.');
       }
-      
+
       if (!downloadData || !downloadData.data || downloadData.data.length === 0) {
         return extra.reply('❌ No media found at the provided link. The post might be private or the link is invalid.');
       }
