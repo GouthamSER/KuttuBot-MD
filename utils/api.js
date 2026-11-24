@@ -67,6 +67,19 @@ const knightExtractMedia = (result) => {
   return out;
 };
 
+// Tiny client for the free btch backend (what the `btch-downloader` npm package wraps).
+// Own implementation: that package pulls ~100MB of build tools (typescript, tsup, jsdoc...).
+// Returns parsed JSON (igdl -> array of { url, thumbnail }; spotify -> { res_data }).
+const BTCH_BASE = process.env.BTCH_BASE || 'https://backend1.tioo.eu.org';
+const btchGet = async (endpoint, url, timeout = 20000) => {
+  const res = await axios.get(`${BTCH_BASE}/${endpoint}`, {
+    params: { url },
+    timeout,
+    headers: { 'Content-Type': 'application/json', 'User-Agent': 'btch/6.4.0', 'X-Client-Version': '6.4.0' }
+  });
+  return res.data;
+};
+
 const knightMeta = (result) => ({
   title: result.title || result.caption || result.desc || '',
   thumbnail: result.thumbnail || result.thumb || result.cover || '',
@@ -77,6 +90,7 @@ const knightMeta = (result) => ({
 const APIs = {
   knightGet,
   knightExtractMedia,
+  btchGet,
 
   // Image Generation
   generateImage: async (prompt) => {
@@ -307,10 +321,10 @@ const APIs = {
       }
     }
 
-    // btch-downloader (snapsave based)
+    // btch backend (snapsave based)
     try {
-      const r = await require('btch-downloader').igdl(url);
-      const data = clean(knightExtractMedia({ download: (r && (r.result || r.data)) || [] }));
+      const r = await btchGet('igdl', url);
+      const data = clean(knightExtractMedia({ download: Array.isArray(r) ? r : (r && (r.result || r.data)) || [] }));
       if (data.length) return { data };
       console.log('btch igdl returned no valid media');
     } catch (e) {

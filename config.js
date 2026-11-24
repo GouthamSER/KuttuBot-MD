@@ -13,16 +13,16 @@ module.exports = {
     sessionName: 'session',
     sessionID: process.env.SESSION_ID || '',
     newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
-    updateZipUrl: 'https://github.com/GouthamSER/KuttuBot-MD/archive/refs/heads/main.zip', // Used for local/VPS update (ZIP)
-    updateTarUrl: 'https://github.com/GouthamSER/KuttuBot-MD/archive/refs/heads/main.tar.gz', // Used for Heroku build trigger (tar.gz required by Platform API)
+    updateZipUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.zip', // Used for local/VPS update (ZIP)
+    updateTarUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.tar.gz', // Used for Heroku build trigger (tar.gz required by Platform API)
     
     // Knight API (primary downloader, others are fallback)
     knightApiBase: process.env.KNIGHT_API_BASE || 'https://knightbotapi.stream',
     knightApiKey: process.env.KNIGHT_API_KEY || 'knight',
 
     // Optional third-party keys (set as env vars on your host)
-    removeBgApiKey: process.env.REMOVEBG_API_KEY || 'RAwQmbCMjxNUxyvz6VJtRNJd', // https://www.remove.bg/api  (needed for .removebg)
-    ocrSpaceApiKey: process.env.OCRSPACE_API_KEY || 'K8666521750408488957', // https://ocr.space/ocrapi (public demo key by default, heavily rate-limited)
+    removeBgApiKey: process.env.REMOVEBG_API_KEY || '', // https://www.remove.bg/api  (needed for .removebg)
+    ocrSpaceApiKey: process.env.OCRSPACE_API_KEY || 'helloworld', // https://ocr.space/ocrapi (public demo key by default, heavily rate-limited)
 
     // Sticker Configuration
     packname: 'Kuttu Bot Mini',
