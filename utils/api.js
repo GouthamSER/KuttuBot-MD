@@ -26,7 +26,7 @@ const knightBase = () => {
 };
 const knightKey = () => String(config.knightApiKey || process.env.KNIGHT_API_KEY || 'knight').trim();
 
-const knightGet = async (path, params = {}) => {
+const knightGet = async (path, params = {}, timeout = 60000) => {
   const res = await axios.get(`${knightBase()}${path}`, {
     params: { apikey: knightKey(), ...params },
     headers: {
@@ -34,7 +34,7 @@ const knightGet = async (path, params = {}) => {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'application/json, text/plain, */*'
     },
-    timeout: 60000
+    timeout
   });
   const data = res.data;
   if (!data || data.success === false || !data.result) {
@@ -240,17 +240,36 @@ const APIs = {
 
   // service: tiktok | instagram | facebook | pinterest | twitter
   // returns { media:[{url,type}], title, thumbnail }
-  getKnightMedia: async (service, url) => {
-    const result = await knightGet(`/api/download/${service}`, { url });
+  getKnightMedia: async (service, url, timeout) => {
+    const result = await knightGet(`/api/download/${service}`, { url }, timeout);
     const media = knightExtractMedia(result);
     if (!media.length) throw new Error(`Knight ${service} returned no download`);
     return { media, ...knightMeta(result) };
   },
 
-  // Drop-in for ruhend igdl(): Knight (retry on 429) -> siputzx -> ruhend. Returns { data:[{url,type}] }
-  // Every provider's output is filtered: ruhend/snapsave sometimes returns junk like
+  // Strip tracking params (?igsh=, ?knvt=, ?utm_*) and extract the bare IG url from message text.
+  // Returns null if no Instagram url found.
+  cleanInstagramUrl: (text) => {
+    const m = String(text || '').match(/https?:\/\/(?:www\.)?(?:instagram\.com|instagr\.am)\/[^\s]+/i);
+    if (!m) return null;
+    try {
+      const u = new URL(m[0]);
+      u.search = '';
+      u.hash = '';
+      let out = u.toString();
+      if (!out.endsWith('/')) out += '/';
+      return out;
+    } catch {
+      return null;
+    }
+  },
+
+  // Drop-in for ruhend igdl(): Knight (fast fail, 1 retry) -> btch -> ruhend. Returns { data:[{url,type}] }
+  // Every provider's output is filtered: snapsave-based scrapers sometimes return junk like
   // "https://snapsave.app&dl=1" (no real media host) -> ENOTFOUND.
-  igdlWithKnight: async (url) => {
+  // Throws Error with .code = 'RATE_LIMIT' | 'TIMEOUT' | 'NO_MEDIA'.
+  igdlWithKnight: async (rawUrl) => {
+    const url = APIs.cleanInstagramUrl(rawUrl) || rawUrl;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const isRealMediaUrl = (u) => {
       try {
@@ -264,48 +283,54 @@ const APIs = {
       }
     };
     const clean = (arr) => (Array.isArray(arr) ? arr : []).filter((m) => m && isRealMediaUrl(m.url));
+    let rateLimited = false;
+    let timedOut = false;
+    const note = (e) => {
+      const msg = `${e && e.code || ''} ${e && e.message || ''}`;
+      if (/429/.test(msg)) rateLimited = true;
+      if (/timeout|ETIMEDOUT|ECONNABORTED/i.test(msg)) timedOut = true;
+    };
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Knight: 8s timeout, 1 retry (only for 429 / timeout)
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const k = await APIs.getKnightMedia('instagram', url);
+        const k = await APIs.getKnightMedia('instagram', url, 8000);
         const data = clean(k.media);
         if (data.length) return { data };
         break;
       } catch (e) {
-        const rateLimited = /429/.test(e.message || '');
-        console.log(`Knight instagram failed (try ${attempt + 1}/3): ${e.message}`);
-        if (!rateLimited || attempt === 2) break;
-        await sleep(1500 * (attempt + 1));
+        note(e);
+        console.log(`Knight instagram failed (try ${attempt + 1}/2): ${e.message}`);
+        if (attempt === 1 || !(rateLimited || timedOut)) break;
+        await sleep(1000);
       }
     }
 
-    try {
-      const r = await APIs.igDownload(url);
-      const data = clean(knightExtractMedia({ download: (r && (r.data || r.result)) || [] }));
-      if (data.length) return { data };
-      console.log('siputzx igdl returned no valid media');
-    } catch (e) {
-      console.log('siputzx igdl failed:', e.message);
-    }
-
+    // btch-downloader (snapsave based)
     try {
       const r = await require('btch-downloader').igdl(url);
       const data = clean(knightExtractMedia({ download: (r && (r.result || r.data)) || [] }));
       if (data.length) return { data };
       console.log('btch igdl returned no valid media');
     } catch (e) {
+      note(e);
       console.log('btch igdl failed:', e.message);
     }
 
+    // ruhend-scraper (snapsave based)
     try {
       const res = await require('ruhend-scraper').igdl(url);
       const data = clean(res && res.data);
       if (data.length) return { ...res, data };
       console.log('ruhend igdl returned no valid media');
     } catch (e) {
+      note(e);
       console.log('ruhend igdl failed:', e.message);
     }
-    throw new Error('Instagram download failed: all providers failed or rate-limited');
+
+    const err = new Error('Instagram download failed: all providers failed');
+    err.code = rateLimited ? 'RATE_LIMIT' : timedOut ? 'TIMEOUT' : 'NO_MEDIA';
+    throw err;
   },
 
   // Song Download APIs
