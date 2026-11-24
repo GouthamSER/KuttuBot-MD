@@ -40,9 +40,9 @@ async function getTrackMeta(trackId) {
     if (data?.title) return { title: data.title, artist: '', image: data.thumbnail_url || '' };
   } catch (e) { /* none */ }
 
-  try { // btch-downloader as last resort
-    const r = await require('btch-downloader').spotify(url);
-    const d = r?.result?.data || r?.result;
+  try { // btch backend as last resort
+    const r = await require('../../utils/api').btchGet('spotify', url);
+    const d = r?.res_data || r?.result || r;
     if (d?.title) return { title: d.title, artist: d.artist || d.artists || '', image: d.thumbnail || d.cover || '' };
   } catch (e) { /* none */ }
   return null;
