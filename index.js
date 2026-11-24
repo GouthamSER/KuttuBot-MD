@@ -314,6 +314,9 @@ async function startBot() {
       console.log(`👑 Owner: ${ownerNames}\n`);
       console.log('Bot is ready to receive messages!\n');
 
+      // Re-arm persisted reminders
+      try { require('./utils/reminders').init(sock); } catch (e) { console.error('Reminders init failed:', e.message); }
+
       // Set bot status
       if (config.autoBio) {
         await sock.updateProfileStatus(`${config.botName} | Active 24/7`);

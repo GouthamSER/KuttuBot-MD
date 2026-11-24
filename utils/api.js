@@ -69,7 +69,8 @@ const knightExtractMedia = (result) => {
 
 const knightMeta = (result) => ({
   title: result.title || result.caption || result.desc || '',
-  thumbnail: result.thumbnail || result.thumb || result.cover || ''
+  thumbnail: result.thumbnail || result.thumb || result.cover || '',
+  author: result.author || result.username || result.owner?.username || result.user?.username || ''
 });
 
 // API Endpoints
@@ -296,7 +297,7 @@ const APIs = {
       try {
         const k = await APIs.getKnightMedia('instagram', url, 8000);
         const data = clean(k.media);
-        if (data.length) return { data };
+        if (data.length) return { data, title: k.title, author: k.author };
         break;
       } catch (e) {
         note(e);

@@ -20,6 +20,10 @@ module.exports = {
     knightApiBase: process.env.KNIGHT_API_BASE || 'https://knightbotapi.stream',
     knightApiKey: process.env.KNIGHT_API_KEY || 'knight',
 
+    // Optional third-party keys (set as env vars on your host)
+    removeBgApiKey: process.env.REMOVEBG_API_KEY || '', // https://www.remove.bg/api  (needed for .removebg)
+    ocrSpaceApiKey: process.env.OCRSPACE_API_KEY || 'helloworld', // https://ocr.space/ocrapi (public demo key by default, heavily rate-limited)
+
     // Sticker Configuration
     packname: 'Kuttu Bot Mini',
     
