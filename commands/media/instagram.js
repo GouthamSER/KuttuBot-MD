@@ -6,62 +6,24 @@ const APIs = require('../../utils/api');
 const igdl = APIs.igdlWithKnight;
 const axios = require('axios');
 const fs = require('fs');
-const path = require('path');
-const { pipeline } = require('stream/promises');
-const { getTempDir } = require('../../utils/tempManager');
+const { fetchMediaFile, detectMediaType } = require('../../utils/igMedia');
 const config = require('../../config');
 
 // Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
 
-// Stream IG CDN media to a temp file (no full-buffer in RAM -> avoids OOM kill, exit 137).
-// Referer/Origin needed or CDN returns HTML. Validate type/size before handing to WA.
-const MAX_BYTES = 100 * 1024 * 1024;
-
-async function fetchMediaFile(mediaUrl, isVideo) {
-  const dir = getTempDir();
-  const filePath = path.join(dir, `ig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${isVideo ? 'mp4' : 'jpg'}`);
-
-  const res = await axios.get(mediaUrl, {
-    responseType: 'stream',
-    timeout: 30000,
-    maxRedirects: 5,
-    validateStatus: (s) => s >= 200 && s < 300,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Referer': 'https://www.instagram.com/',
-      'Origin': 'https://www.instagram.com',
-      'Accept': isVideo ? 'video/mp4,video/*,*/*;q=0.8' : 'image/avif,image/webp,image/*,*/*;q=0.8'
+// Caption: author + title (first item only) + slide counter for carousels
+function buildCaption(meta, index, total) {
+  const lines = [`*DOWNLOADED BY ${config.botName.toUpperCase()}*`];
+  if (index === 0) {
+    if (meta && meta.author) lines.push(`👤 @${String(meta.author).replace(/^@/, '')}`);
+    if (meta && meta.title) {
+      const t = String(meta.title).trim();
+      if (t) lines.push(t.length > 300 ? t.slice(0, 297) + '...' : t);
     }
-  });
-
-  try {
-    const contentType = (res.headers['content-type'] || '').toLowerCase();
-    const expectedPrefix = isVideo ? 'video/' : 'image/';
-    if (/text\/html/.test(contentType)) {
-      throw new Error('blocked: got HTML page instead of media (IG CDN rejected request)');
-    }
-    if (contentType && !contentType.startsWith(expectedPrefix) && contentType !== 'application/octet-stream') {
-      throw new Error(`unexpected content-type: ${contentType}`);
-    }
-    const declared = parseInt(res.headers['content-length'] || '0', 10);
-    if (declared > MAX_BYTES) throw new Error(`file too large: ${(declared / 1048576).toFixed(1)}MB`);
-
-    let received = 0;
-    res.data.on('data', (c) => {
-      received += c.length;
-      if (received > MAX_BYTES) res.data.destroy(new Error('file too large'));
-    });
-    await pipeline(res.data, fs.createWriteStream(filePath));
-
-    if (fs.statSync(filePath).size < 512) {
-      throw new Error('suspiciously small file');
-    }
-    return filePath;
-  } catch (err) {
-    fs.promises.unlink(filePath).catch(() => {});
-    throw err;
   }
+  if (total > 1) lines.push(`📸 ${index + 1}/${total}`);
+  return lines.join('\n');
 }
 
 // Function to extract unique media URLs with simple deduplication
@@ -93,23 +55,6 @@ function isValidMediaUrl(url) {
   } catch {
     return false;
   }
-}
-
-// IG CDN urls have no file extension, so extension/type-field guessing alone is unreliable
-// (especially for story links). Ask the CDN directly what it is.
-async function detectMediaType(mediaUrl) {
-  try {
-    const res = await fetch(mediaUrl, {
-      method: 'HEAD',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.startsWith('video/')) return 'video';
-    if (contentType.startsWith('image/')) return 'image';
-  } catch (e) {
-    // HEAD blocked/failed, fall through to extension guess below
-  }
-  return null;
 }
 
 module.exports = {
@@ -191,8 +136,8 @@ module.exports = {
       // Simple deduplication - just remove exact URL duplicates
       const uniqueMedia = extractUniqueMedia(mediaData);
       
-      // Limit to maximum 20 unique media items
-      const mediaToDownload = uniqueMedia.slice(0, 20);
+      // Limit to 10 unique media items (IG carousel max)
+      const mediaToDownload = uniqueMedia.slice(0, 10); // carousel max 10 slides
       
       if (mediaToDownload.length === 0) {
         return extra.reply('❌ No valid media found to download. This might be a private post or the scraper failed.');
@@ -223,7 +168,7 @@ module.exports = {
             await sock.sendMessage(chatId, {
               video: { url: tmpFile },
               mimetype: 'video/mp4',
-              caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
+              caption: buildCaption(downloadData, i, mediaToDownload.length)
             }, { quoted: msg });
           } else {
             // Same deal for images: direct-URL stream gets blocked/blank by IG CDN too.
@@ -231,7 +176,7 @@ module.exports = {
 
             await sock.sendMessage(chatId, {
               image: { url: tmpFile },
-              caption: `*DOWNLOADED BY ${config.botName.toUpperCase()}*`
+              caption: buildCaption(downloadData, i, mediaToDownload.length)
             }, { quoted: msg });
           }
           
