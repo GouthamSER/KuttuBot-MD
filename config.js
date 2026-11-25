@@ -5,16 +5,16 @@
 module.exports = {
     // Bot Owner Configuration
     ownerNumber: ['917034898741','917034898741'], // Add your number without + or spaces (e.g., 919876543210)
-    ownerName: ['Kuttu Bot Mini', 'Goutham Josh'], // Owner names corresponding to ownerNumber array
+    ownerName: ['Kuttu Bot MD', 'Goutham Josh'], // Owner names corresponding to ownerNumber array
     
     // Bot Configuration
-    botName: 'Kuttu Bot Mini',
+    botName: 'Kuttu Bot MD',
     prefix: '.',
     sessionName: 'session',
     sessionID: process.env.SESSION_ID || '',
     newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
-    updateZipUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.zip', // Used for local/VPS update (ZIP)
-    updateTarUrl: 'https://github.com/GouthamSER/KuttuBot-mini-MD/archive/refs/heads/main.tar.gz', // Used for Heroku build trigger (tar.gz required by Platform API)
+    updateZipUrl: 'https://github.com/GouthamSER/KuttuBot-MD/archive/refs/heads/main.zip', // Used for local/VPS update (ZIP)
+    updateTarUrl: 'https://github.com/GouthamSER/KuttuBot-MD/archive/refs/heads/main.tar.gz', // Used for Heroku build trigger (tar.gz required by Platform API)
     
     // Knight API (primary downloader, others are fallback)
     knightApiBase: process.env.KNIGHT_API_BASE || 'https://knightbotapi.stream',
@@ -25,7 +25,7 @@ module.exports = {
     ocrSpaceApiKey: process.env.OCRSPACE_API_KEY || 'helloworld', // https://ocr.space/ocrapi (public demo key by default, heavily rate-limited)
 
     // Sticker Configuration
-    packname: 'Kuttu Bot Mini',
+    packname: 'Kuttu Bot MD',
     
     // Bot Behavior
     selfMode: false, // Private mode - only owner can use commands
@@ -93,6 +93,6 @@ module.exports = {
     social: {
       github: 'https://github.com/GouthamSER',
       instagram: 'https://instagram.com/im_goutham_josh',
-      youtube: 'http://youtube.com/@mr_unique_hacker'
+      youtube: 'http://youtube.com/@killadi_chandu'
     }
 };
