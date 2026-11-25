@@ -4,6 +4,7 @@
 
 <br/>
 
+[![Version](https://img.shields.io/badge/Version-2.0.0-ff4081?style=for-the-badge)](#-whats-new-in-v200)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Baileys](https://img.shields.io/badge/Baileys-v7-00bcd4?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
@@ -32,6 +33,18 @@
 | 🛡️ Admin | 21 |
 | 🤖 AI | 3 |
 | 🌸 Anime | 9 |
+| 🎉 Fun | 16 |
+| ⚙️ General | 21 |
+| 🎬 Media | 26 |
+| 👑 Owner | 20 |
+| ✍️ Text Maker | 18 |
+| 🔧 Utility | 7 |
+| **Total** | **141** |
+
+--------:|:--------:|
+| 🛡️ Admin | 21 |
+| 🤖 AI | 3 |
+| 🌸 Anime | 9 |
 | 🎉 Fun | 13 |
 | ⚙️ General | 21 |
 | 🎬 Media | 11 |
@@ -39,6 +52,20 @@
 | ✍️ Text Maker | 18 |
 | 🔧 Utility | 3 |
 | **Total** | **117** |
+
+---
+
+## 🆕 What's New in v2.0.0
+
+- 📥 **New downloader engine** (`utils/providers.js`) — circuit breaker (a dead / over-quota API is skipped for minutes), hedged requests (next API starts if one is slow), first success wins
+- 🎥 **YouTube** — keyless Savetube + ytmp3.mobi scrapers, btch backend, plus community REST APIs
+- 📸 **Instagram** — SaveIG-style scrapers, btch backend, URL cleaner (`?igsh=` / `?knvt=` removed), carousel support with `1/5` captions, author + caption
+- 🌐 **btch-downloader support, all endpoints** — `utils/btch.js` implements every endpoint (no heavy npm package): new `.twitter` `.threads` `.soundcloud` `.mediafire` `.gdrive` `.capcut` `.douyin` `.snackvideo` `.cocofun` `.kuaishou` `.rednote` `.aio` `.yts`
+- 🎧 **`.spotify`** (track → audio), **`.igmp3`** (reel → MP3)
+- 🧰 **New utilities** — `.reminder` (survives restarts), `.upscale`, `.removebg`, `.ocr`
+- 🎲 **New fun** — `.quote` `.fact` `.wyr`
+- 🧪 **Owner tools** — `.apitest` (live-test every downloader API from your host), `.botstats` (RAM / CPU / temp)
+- ⚡ **Stability** — media streamed to temp files (fixes OOM exit 137), honest error messages, much lighter `node_modules` (~120 MB instead of ~340 MB)
 
 ---
 
@@ -52,7 +79,7 @@
 - 👋 **Welcome / Goodbye** — image-based join/leave messages with profile picture
 - 🤖 **AI Commands** — ChatGPT text, image generation, magic studio
 - 🎨 **Text Maker** — 18 stylized text effects (fire, neon, glitch, matrix, and more)
-- 📲 **Media Downloaders** — YouTube (song/video), TikTok, Instagram, Facebook, Pinterest. **Knight API is tried first**, then automatic fallback to other APIs/scrapers
+- 📲 **Media Downloaders** — YouTube, Instagram, TikTok, Facebook, Pinterest, Spotify, Twitter/X, Threads, SoundCloud, MediaFire, Google Drive, CapCut, Douyin, SnackVideo, CocoFun, Kuaishou, RedNote and more. Multi-provider with automatic failover (see *Downloader API Order*)
 - ⚡ **RAM-Optimized** — streaming media handling + automatic temp file cleanup
 - 🔄 **Auto React** — react to commands or all messages with emoji
 - 🛡️ **Bot Admin Checks** — live metadata fetching for reliable admin operations
@@ -158,6 +185,8 @@ node index.js
 | `botName` | Display name of the bot | `Kuttu Bot Mini` |
 | `knightApiKey` | Key for Knight API (primary downloader). Env: `KNIGHT_API_KEY` | `knight` |
 | `knightApiBase` | Knight API base URL. Env: `KNIGHT_API_BASE` | `https://knightbotapi.stream` |
+| `removeBgApiKey` | remove.bg key for `.removebg`. Env: `REMOVEBG_API_KEY` | `''` |
+| `ocrSpaceApiKey` | ocr.space key for `.ocr`. Env: `OCRSPACE_API_KEY` | demo key |
 | `ownerNumber` | Your WhatsApp number(s) | `['91XXXXXXXXXX']` |
 | `autoTyping` | Show typing indicator on commands | `true` |
 | `autoReact` | Auto-react to messages | `false` |
@@ -177,24 +206,54 @@ When the bot is running in **Public Mode** (`selfMode: false`), it responds to u
 - **Get group/chat JID**: Send `.jid` to copy the current group's JID.
 - **Make bot leave group**: Send `.leave [groupJid]` to have the bot leave gracefully.
 
-> **Storage:** Blocked groups are persisted in [database/antigroup.json](file:///c:/Users/Goutham%20Josh/Downloads/KuttuBot-MD-main/database/antigroup.json) and can also be defined in [config.js](file:///c:/Users/Goutham%20Josh/Downloads/KuttuBot-MD-main/config.js) under `blockedGroups`.
+> **Storage:** Blocked groups are persisted in [database/antigroup.json](database/antigroup.json) and can also be defined in [config.js](config.js) under `blockedGroups`.
 
 ---
 
 ## 📥 Downloader API Order
 
-Every downloader tries **[Knight API](https://knightbotapi.stream/)** first. If it fails, the bot falls back automatically.
+Providers are tried in order, but the next one **starts early if the current one is slow** (4 s). A provider that fails with 402 / 429 / 404 / DNS / timeout is **skipped for 2–30 min** so one dead API never slows every request. Run **`.apitest`** (owner) to see which providers work from your host right now.
 
 | Command | Order |
 |---------|-------|
-| `.song` | Knight → EliteProTech → Ruhend → Yupra → Okatsu → Izumi |
-| `.video` | Knight → EliteProTech → Ruhend → Yupra → Okatsu |
-| `.tiktok` | Knight → Siputzx → ttdl |
-| `.facebook` | Knight → bochilteam scraper |
+| `.song` | Knight → **Multi** (Savetube → ytmp3.mobi → btch → community APIs) → EliteProTech → Ruhend → Yupra → Okatsu → Izumi |
+| `.video` | Knight → **Multi** (same chain) → EliteProTech → Ruhend → Yupra → Okatsu |
+| `.instagram` / `.story` / `.igs` | Knight → SaveIG-style scrapers + btch + community APIs → ruhend `igdl` |
+| `.tiktok` | Knight → btch `ttdl` → Siputzx |
+| `.facebook` | Knight → btch `fbdown` → bochilteam scraper |
 | `.pinterest` | Knight → nexray |
-| `.instagram` / `.story` / `.igs` | Knight → ruhend `igdl` |
+| `.spotify` | Spotify page → matched on YouTube via `.song` chain |
+| `.twitter` `.threads` `.soundcloud` `.mediafire` `.gdrive` `.capcut` `.douyin` `.snackvideo` `.cocofun` `.kuaishou` `.rednote` `.aio` | btch backend |
 
-Set your own key: `export KNIGHT_API_KEY=your_key` (or edit `config.js`).
+**Add your own API without code** — set an env var with a JSON array, `{url}` is replaced by the link:
+
+```bash
+YT_AUDIO_APIS='["https://host/api/ytmp3?url={url}&apikey=XXX"]'
+YT_VIDEO_APIS='["https://host/api/ytmp4?url={url}&apikey=XXX"]'
+IG_APIS='["https://host/api/igdl?url={url}"]'
+```
+
+Other env vars: `KNIGHT_API_KEY`, `KNIGHT_API_BASE`, `BTCH_BASE`, `YT_VIDEO_QUALITY` (default `360`), `PROVIDER_HEDGE_MS` (default `4000`), `REMOVEBG_API_KEY`, `OCRSPACE_API_KEY`.
+
+> **Tip:** if you get `402`/`429` from Knight, the shared default key is out of quota. Use your own key (`KNIGHT_API_KEY`) or rely on the fallbacks above.
+
+---
+
+## 🆕 New Commands (v2.0.0)
+
+| Command | What it does |
+|---------|--------------|
+| `.igmp3 <reel link>` | Instagram reel → MP3 |
+| `.spotify <track link>` | Spotify track → audio |
+| `.twitter` `.threads` `.soundcloud` `.mediafire` `.gdrive` `.capcut` `.douyin` `.snackvideo` `.cocofun` `.kuaishou` `.rednote` `.aio` `<link>` | Download from that site |
+| `.yts <text>` | YouTube search |
+| `.reminder 10m text` / `list` / `cancel <id>` | Persistent reminders |
+| `.upscale` | 2x enlarge + sharpen an image (reply to image) |
+| `.removebg` | Remove image background (needs `REMOVEBG_API_KEY`) |
+| `.ocr [lang]` | Read text from an image |
+| `.quote` `.fact` `.wyr` | Random quote / fun fact / would-you-rather |
+| `.apitest [yt\|ig]` | 👑 Live-test all downloader APIs from your host |
+| `.botstats` | 👑 RAM / CPU / uptime / temp usage |
 
 ---
 
@@ -228,11 +287,16 @@ KuttuBot-mini-MD/
 │   ├── media/        # YouTube, TikTok, Instagram, MP3 converter …
 │   ├── owner/        # Bot management (restart, update, broadcast …)
 │   ├── textmaker/    # Stylized text effects
-│   └── utility/      # Calc, translate, weather
+│   └── utility/      # Reminder, upscale, removebg, OCR, calc, weather
 ├── utils/
 │   ├── converter.js  # FFmpeg wrappers (toAudio, toPTT, toVideo)
 │   ├── tempManager.js
-│   ├── api.js
+│   ├── api.js        # Knight + legacy APIs, TikTok/FB chains
+│   ├── providers.js  # Multi-provider engine (breaker, hedging, scrapers)
+│   ├── btch.js       # All btch-downloader endpoints (no npm package)
+│   ├── btchSend.js   # Shared factory for btch-based commands
+│   ├── igMedia.js    # IG CDN streaming helper
+│   ├── reminders.js  # Persistent reminders
 │   └── sticker.js
 ├── config.js
 ├── handler.js

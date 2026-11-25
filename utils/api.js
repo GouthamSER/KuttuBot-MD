@@ -4,6 +4,7 @@
 
 const axios = require('axios');
 const config = require('../config');
+const providers = require('./providers');
 
 const api = axios.create({
   timeout: 30000,
@@ -26,7 +27,8 @@ const knightBase = () => {
 };
 const knightKey = () => String(config.knightApiKey || process.env.KNIGHT_API_KEY || 'knight').trim();
 
-const knightGet = async (path, params = {}, timeout = 60000) => {
+const knightGet = (path, params = {}, timeout = 60000) => providers.guarded('knight', () => knightGetRaw(path, params, timeout));
+const knightGetRaw = async (path, params = {}, timeout = 60000) => {
   const res = await axios.get(`${knightBase()}${path}`, {
     params: { apikey: knightKey(), ...params },
     headers: {
@@ -67,18 +69,7 @@ const knightExtractMedia = (result) => {
   return out;
 };
 
-// Tiny client for the free btch backend (what the `btch-downloader` npm package wraps).
-// Own implementation: that package pulls ~100MB of build tools (typescript, tsup, jsdoc...).
-// Returns parsed JSON (igdl -> array of { url, thumbnail }; spotify -> { res_data }).
-const BTCH_BASE = process.env.BTCH_BASE || 'https://backend1.tioo.eu.org';
-const btchGet = async (endpoint, url, timeout = 20000) => {
-  const res = await axios.get(`${BTCH_BASE}/${endpoint}`, {
-    params: { url },
-    timeout,
-    headers: { 'Content-Type': 'application/json', 'User-Agent': 'btch/6.4.0', 'X-Client-Version': '6.4.0' }
-  });
-  return res.data;
-};
+const { btch, btchGet } = require('./btch'); // all btch-downloader endpoints, no npm package
 
 const knightMeta = (result) => ({
   title: result.title || result.caption || result.desc || '',
@@ -91,6 +82,9 @@ const APIs = {
   knightGet,
   knightExtractMedia,
   btchGet,
+  btch,
+  ytAudioMulti: (url) => providers.ytAudio(url),
+  ytVideoMulti: (url) => providers.ytVideo(url),
 
   // Image Generation
   generateImage: async (prompt) => {
@@ -302,7 +296,7 @@ const APIs = {
     let timedOut = false;
     const note = (e) => {
       const msg = `${e && e.code || ''} ${e && e.message || ''}`;
-      if (/429/.test(msg)) rateLimited = true;
+      if (/429|402/.test(msg)) rateLimited = true;
       if (/timeout|ETIMEDOUT|ECONNABORTED/i.test(msg)) timedOut = true;
     };
 
@@ -316,20 +310,21 @@ const APIs = {
       } catch (e) {
         note(e);
         console.log(`Knight instagram failed (try ${attempt + 1}/2): ${e.message}`);
-        if (attempt === 1 || !(rateLimited || timedOut)) break;
+        if (e.skipped || e.response?.status === 402 || attempt === 1 || !(rateLimited || timedOut)) break;
         await sleep(1000);
       }
     }
 
-    // btch backend (snapsave based)
+    // Multi-provider layer: SaveIG-style scrapers + community REST APIs (circuit breaker + hedging)
     try {
-      const r = await btchGet('igdl', url);
-      const data = clean(knightExtractMedia({ download: Array.isArray(r) ? r : (r && (r.result || r.data)) || [] }));
-      if (data.length) return { data };
-      console.log('btch igdl returned no valid media');
+      const r = await providers.instagram(url);
+      const data = clean(r.data);
+      if (data.length) return { data, title: r.title };
+      console.log('providers.instagram returned no valid media');
     } catch (e) {
       note(e);
-      console.log('btch igdl failed:', e.message);
+      (e.errors || []).forEach((x) => note({ message: x.message, response: { status: x.status } }));
+      console.log('providers.instagram failed:', e.message);
     }
 
     // ruhend-scraper (snapsave based)
@@ -734,6 +729,14 @@ const APIs = {
       return { videoUrl: vid.url, title: k.title || 'TikTok Video' };
     } catch (e) {
       console.log('Knight tiktok failed, falling back to Siputzx:', e.message);
+    }
+    try {
+      const t = await btch.ttdl(url);
+      const v = t.status && Array.isArray(t.video) ? t.video.find((x) => typeof x === 'string' && /^https?:/.test(x)) : null;
+      if (v) return { videoUrl: v, title: t.title || 'TikTok Video' };
+      console.log('btch ttdl returned no video:', t.message || '');
+    } catch (e) {
+      console.log('btch ttdl failed:', e.message);
     }
     const apiUrl = `https://api.siputzx.my.id/api/d/tiktok?url=${encodeURIComponent(url)}`;
     try {
