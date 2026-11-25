@@ -82,6 +82,7 @@ module.exports = {
       // List of API methods to try
       const apiMethods = [
         { name: 'Knight', method: () => APIs.getKnightAudio(video.url) },
+        { name: 'Multi', method: () => APIs.ytAudioMulti(video.url) }, // savetube / ymcdn / community APIs (breaker + hedged)
         { name: 'EliteProTech', method: () => APIs.getEliteProTechDownloadByUrl(video.url) },
         { name: 'RuhendScraper', method: () => APIs.getRuhendDownloadByUrl(video.url) },
         { name: 'Yupra', method: () => APIs.getYupraDownloadByUrl(video.url) },
@@ -178,7 +179,7 @@ module.exports = {
       
       // If all APIs failed, throw error
       if (!downloadSuccess || !audioBuffer) {
-        throw new Error('All download sources failed. The content may be unavailable or blocked in your region.');
+        throw new Error('All download sources failed. Download servers are busy or the video is unavailable.');
       }
 
       // Validate buffer
@@ -291,14 +292,14 @@ module.exports = {
       
       // Provide more specific error messages
       let errorMessage = '❌ Failed to download song.';
-      if (err.message && err.message.includes('blocked')) {
-        errorMessage = '❌ Download blocked. The content may be unavailable in your region or due to legal restrictions.';
-      } else if (err.response?.status === 451 || err.status === 451) {
+      if (err.message && err.message.includes('All download sources failed')) {
+        errorMessage = '❌ All download servers are busy or failed right now. Try again in a minute, or try a different song.';
+      } else if (err.response?.status === 451 || err.status === 451 || (err.message && /451|legal/i.test(err.message))) {
         errorMessage = '❌ Content unavailable (451). This may be due to legal restrictions or regional blocking.';
-      } else if (err.message && err.message.includes('All download sources failed')) {
-        errorMessage = '❌ All download sources failed. The content may be unavailable or blocked.';
+      } else if (err.response?.status === 402 || err.response?.status === 429) {
+        errorMessage = '❌ Download server is over its limit. Try again in a few minutes.';
       }
-      
+
       await sock.sendMessage(msg.key.remoteJid, { 
         text: errorMessage 
       }, { quoted: msg });

@@ -82,6 +82,23 @@ module.exports = {
         } catch (knightErr) {
           console.log('Knight facebook failed, falling back to scraper:', knightErr.message);
         }
+        // btch fbdown (HD first)
+        try {
+          const b = await APIs.btch.fbdown(url);
+          const bUrl = b.status && (b.HD || b.Normal_video);
+          if (bUrl && /^https?:/.test(bUrl)) {
+            const bCaption = `*DOWNLOADED BY ${config.botName.toUpperCase()}*`;
+            try {
+              await sock.sendMessage(extra.from, { video: { url: bUrl }, mimetype: 'video/mp4', caption: bCaption }, { quoted: msg });
+            } catch (sendErr) {
+              const r = await axios.get(bUrl, { responseType: 'arraybuffer', timeout: 120000, maxContentLength: 100 * 1024 * 1024 });
+              await sock.sendMessage(extra.from, { video: Buffer.from(r.data), mimetype: 'video/mp4', caption: bCaption }, { quoted: msg });
+            }
+            return;
+          }
+        } catch (btchErr) {
+          console.log('btch fbdown failed, falling back to scraper:', btchErr.message);
+        }
         const data = await facebookdl(url);
         
         if (!data || !data.video || !Array.isArray(data.video) || data.video.length === 0) {

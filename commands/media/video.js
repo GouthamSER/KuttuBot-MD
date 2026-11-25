@@ -76,6 +76,13 @@ module.exports = {
       } catch (e0) {
         console.log('[VIDEO] Knight failed:', e0?.message);
       }
+      if (!videoData || !videoData.download) {
+        try {
+          videoData = await APIs.ytVideoMulti(videoUrl); // savetube / ymcdn / community APIs
+        } catch (eM) {
+          console.log('[VIDEO] Multi failed:', eM?.message);
+        }
+      }
       if (!videoData || !videoData.download) try {
         videoData = await APIs.getEliteProTechVideoByUrl(videoUrl);
       } catch (e1) {
@@ -91,7 +98,7 @@ module.exports = {
       }
 
       if (!videoData || !videoData.download) {
-        throw new Error('All video download sources failed');
+        throw new Error('All video download servers are busy or failed. Try again in a minute.');
       }
 
       // Send video directly using download URL, fallback to buffer if stream fetch is blocked
