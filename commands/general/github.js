@@ -28,7 +28,7 @@ module.exports = {
                 // Fetch repository data from GitHub API
                 const response = await axios.get(apiUrl, {
                     headers: {
-                        'User-Agent': 'KnightBot-Mini'
+                        'User-Agent': 'KuttuBot-MD'
                     }
                 });
                 
@@ -68,8 +68,8 @@ module.exports = {
                 
                 let fallbackMessage = `╭━━『 *GitHub Repository* 』━━╮\n\n`;
                 fallbackMessage += `🤖 *Bot Name:* ${config.botName}\n`;
-                fallbackMessage += `🔗 *Repository:* KnightBot-Mini\n`;
-                fallbackMessage += `👨‍💻 *Owner:* mruniquehacker\n`;
+                fallbackMessage += `🔗 *Repository:* KuttuBot-MD\n`;
+                fallbackMessage += `👨‍💻 *Owner:* GouthamSER\n`;
                 fallbackMessage += `🌐 *URL:* ${repoUrl}\n\n`;
                 fallbackMessage += `⚠️ *Note:* Unable to fetch real-time statistics.\n`;
                 fallbackMessage += `Please visit the repository directly for latest stats.\n\n`;
